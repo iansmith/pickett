@@ -1,0 +1,152 @@
+package pickett
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// DockerBuildNode has a dependecy between the object to build and the image
+// that is used to build it.  This implements the Node interface.
+type DockerBuildNode struct {
+	//in      []Node
+	runIn   Node
+	out     []Node
+	tag     string
+	pkgs    []string
+	test    bool
+	generic string
+	tagTime time.Time
+}
+
+// IsOutOfDate returns true if the tag that we are trying to produce is
+// before the tag of the image we depend on.
+func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper) (bool, error) {
+	t, err := tagToTime(b.tag, helper)
+	if err != nil {
+		return false, err
+	}
+	if t.IsZero() {
+		fmt.Printf("[pickett] Building %s (tag not found)\n", b.tag)
+		return true, nil
+	}
+	err = b.BringInboundUpToDate(conf, helper)
+	if err != nil {
+		return false, err
+	}
+	if t.Before(b.runIn.Time()) {
+		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", b.tag, b.runIn.Name())
+		return true, nil
+	}
+	fmt.Printf("[pickett] Faking out of date for %s to force build/test\n", b.tag)
+	return true, nil
+}
+
+func (b *DockerBuildNode) build(conf *Config, helper IOHelper) error {
+	var buffer, errOutput bytes.Buffer
+
+	cli, err := helper.Docker()
+	if err != nil {
+		return err
+	}
+	args := []string{}
+	if conf.CodeVolume.Directory != "" {
+		args = append(args, "-v", conf.CodeVolume.Directory+":"+conf.CodeVolume.MountedAt)
+	}
+	cmd := "install"
+	if b.test {
+		cmd = "test"
+	}
+	var command string
+	if b.generic == "" {
+		command = fmt.Sprintf("%s go %s %s", b.runIn.Name(), cmd, b.pkgs[0])
+	} else {
+		command = fmt.Sprintf("%s %s", b.runIn.Name(), b.generic)
+	}
+	args = append(args, strings.Split(command, " ")...)
+	//why is this so hard?
+	var printRep bytes.Buffer
+	printRep.WriteString("docker run ")
+	for _, arg := range args {
+		printRep.WriteString(arg)
+		printRep.WriteString(" ")
+	}
+	fmt.Printf("[pickett] %s\n", printRep.String())
+	err = cli.CmdRun(args...)
+	if err != nil {
+		fmt.Printf("%s\n", errOutput.String())
+		return err
+	}
+	buffer.Reset()
+	err = cli.CmdPs("-q", "-l")
+	if err != nil {
+		return errors.New(fmt.Sprintf("failed trying to tag %s: %v", b.tag, err))
+	}
+	id := strings.Trim(buffer.String(), "\n")
+	buffer.Reset()
+	err = cli.CmdCommit(id)
+	if err != nil {
+		return err
+	}
+	id = strings.Trim(buffer.String(), "\n")
+	err = cli.CmdTag(id, b.tag)
+	if err != nil {
+		return err
+	}
+	//command was ok, we need to tag it now
+	return nil
+}
+
+//Build does the work of building a go package in a container. XXX we don't detect
+//if go is installed in the container. XXX
+func (b *DockerBuildNode) Build(conf *Config, helper IOHelper) error {
+	helper.Debug("BUILD(%s)", b.Name())
+	err := b.BringInboundUpToDate(conf, helper)
+	if err != nil {
+		return err
+	}
+
+	ood, err := b.IsOutOfDate(conf, helper)
+	if err != nil {
+		return err
+	}
+	if !ood {
+		fmt.Printf("[pickett] %s is up to date.\n", b.tag)
+		return nil
+	}
+	if err := b.build(conf, helper); err != nil {
+		return err
+	}
+	return nil
+}
+
+//IsSink is true if this node has no outbound edges.
+func (b *DockerBuildNode) IsSink() bool {
+	return len(b.out) == 0
+}
+
+//BringInboundUpToDate walks all the nodes that this node depends on
+//up to date.
+func (b *DockerBuildNode) BringInboundUpToDate(conf *Config, helper IOHelper) error {
+	if err := b.runIn.Build(conf, helper); err != nil {
+		return err
+	}
+	return nil
+}
+
+//AddOut adds an outgoing edge from this node.
+func (b *DockerBuildNode) AddOut(n Node) {
+	b.out = append(b.out, n)
+}
+
+//Name prints the name of this node for a human to consume
+func (s *DockerBuildNode) Name() string {
+	return s.tag
+}
+
+//Time returns the most recent build time.
+func (s *DockerBuildNode) Time() time.Time {
+	return s.tagTime
+}
