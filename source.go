@@ -1,25 +1,14 @@
 package pickett
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	docker_utils "github.com/dotcloud/docker/utils"
+
+	"github.com/igneoussystems/pickett/io"
 )
-
-//marshaledTime is a utility type to allow UnmarshalJSON to hang on a type
-//so we can unmarshal json conveniently to this type.
-type marshaledTime time.Time
-
-//interestingPartsOfInspect is a utility for pulling things out of the json
-//returned by docker server inspect function.
-type interestingPartsOfInspect struct {
-	Created marshaledTime
-}
 
 //DockerSourceNode represents a node in the dependency graph that understands
 //about how to build a docker image.  This implements the Node interface.
@@ -32,28 +21,10 @@ type DockerSourceNode struct {
 	out     []Node
 }
 
-//UnmarshalJSON turns something in RFC3339Nano form (which is used by Docker)
-//into a real timestamp.
-func (m *marshaledTime) UnmarshalJSON(b []byte) error {
-	str := string(b)
-	str = strings.Trim(str, "\"")
-	t, err := time.Parse(time.RFC3339Nano, str)
-	if err != nil {
-		return err
-	}
-	*m = marshaledTime(t)
-	return nil
-}
-
-var (
-	BAD_INSPECT_RESULT = errors.New("unable to understand result of docker inspect")
-)
-
 //helper func to look up the timestamp for a given tag in docker. The input
 //can be a tag or an id.
-func tagToTime(tag string, cli DockerCli) (time.Time, error) {
-	var buffer bytes.Buffer
-	err := cli.CmdInspect(tag)
+func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
+	interesting, err := cli.DecodeInspect(tag)
 	if err != nil {
 		statusErr, ok := err.(*docker_utils.StatusError)
 		if !ok {
@@ -65,23 +36,13 @@ func tagToTime(tag string, cli DockerCli) (time.Time, error) {
 		}
 		return time.Time{}, err
 	}
-
-	dec := json.NewDecoder(&buffer)
-	result := []interestingPartsOfInspect{}
-	err = dec.Decode(&result)
-	if err != nil {
-		return time.Time{}, err
-	}
-	if len(result) != 1 {
-		return time.Time{}, BAD_INSPECT_RESULT
-	}
-	return time.Time(result[0].Created), nil
+	return time.Time(interesting.Created()), nil
 }
 
 //setTimestampOnImage sets the timestamp that docker has registered for a given image
 //name.  The name given should be unique.  If no image with the name can be found,
 //the zero value of time.Time is returned, not an error.  Any error is likely fatal.
-func (d *DockerSourceNode) setTimestampOnImage(helper IOHelper, cli DockerCli) error {
+func (d *DockerSourceNode) setTimestampOnImage(helper io.IOHelper, cli io.DockerCli) error {
 	t, err := tagToTime(d.name, cli)
 	if err != nil {
 		return err
@@ -97,7 +58,7 @@ func (d *DockerSourceNode) setTimestampOnImage(helper IOHelper, cli DockerCli) e
 
 //setLastTimeOnDirectoryEntry looks at the directory in the node and returns the latest
 //modification time found on a file in that directory.
-func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper IOHelper) error {
+func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper io.IOHelper) error {
 	last, err := helper.LastTimeInDirRelative(d.dir)
 	if err != nil {
 		return err
@@ -110,7 +71,7 @@ func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper IOHelper) error {
 //IsOutOfDateCompares a docker image time to the latest timestamp in the directory
 //that holds the dockerfile.  Note that an image that is unknown is not out of date
 //with respect to an empty directory (time stamps are equal).
-func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerCli) (bool, error) {
+func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error) {
 	if err := d.setLastTimeOnDirectoryEntry(helper); err != nil {
 		return false, err
 	}
@@ -141,7 +102,7 @@ func (d *DockerSourceNode) Time() time.Time {
 
 //BringInboundUpToDate walks all the inbound edges and calls Build() on each one.
 //This process is recursive.
-func (d *DockerSourceNode) BringInboundUpToDate(config *Config, helper IOHelper, cli DockerCli) error {
+func (d *DockerSourceNode) BringInboundUpToDate(config *Config, helper io.IOHelper, cli io.DockerCli) error {
 	for _, in := range d.in {
 		if err := in.Build(config, helper, cli); err != nil {
 			return err
@@ -162,7 +123,7 @@ func (s *DockerSourceNode) Name() string {
 
 //Build constructs a new image based on a directory that has a dockerfile. It
 //calls the docker server to actuallyli perform the build.
-func (d *DockerSourceNode) Build(config *Config, helper IOHelper, cli DockerCli) error {
+func (d *DockerSourceNode) Build(config *Config, helper io.IOHelper, cli io.DockerCli) error {
 	helper.Debug("Building '%s'...", d.Name())
 	err := d.BringInboundUpToDate(config, helper, cli)
 	if err != nil {

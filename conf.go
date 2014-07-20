@@ -8,6 +8,8 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
+
+	pickett_io "github.com/igneoussystems/pickett/io"
 )
 
 type Source struct {
@@ -41,7 +43,7 @@ type Config struct {
 // NewCofingFile creates a new instance of configuration, including
 // all the parsing of the config file and validation checking on the
 // items therein.
-func NewConfig(reader io.Reader, helper IOHelper) (*Config, error) {
+func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 	all, err := ioutil.ReadAll(reader)
 	helper.CheckFatal(err, "could not read all of configuration file: %v")
 	lines := strings.Split(string(all), "\n")
@@ -76,7 +78,7 @@ func NewConfig(reader io.Reader, helper IOHelper) (*Config, error) {
 // dockerSourceNodes walks all the nodes defined in the configuration file
 // and returns them in a list.  The edges between the nodes are already
 // in place when this function completes.
-func (c *Config) dockerSourceNodes(helper IOHelper) error {
+func (c *Config) dockerSourceNodes(helper pickett_io.IOHelper) error {
 	for _, img := range c.Sources {
 		n, err := c.newDockerSourceNode(img, helper)
 		if err != nil {
@@ -140,7 +142,7 @@ func (c *Config) dockerBuildNodes() ([]*DockerBuildNode, error) {
 // Pickett.json file to construct paths such that the directory is relative
 // to the place where the Pickett.json is located.  This ignores the issue
 // of edges.
-func (c *Config) newDockerSourceNode(src *Source, helper IOHelper) (*DockerSourceNode, error) {
+func (c *Config) newDockerSourceNode(src *Source, helper pickett_io.IOHelper) (*DockerSourceNode, error) {
 	node := &DockerSourceNode{
 		name: src.Tag,
 		dir:  src.Directory,
@@ -181,7 +183,7 @@ func (c *Config) newDockerBuildNode(build *Build) (*DockerBuildNode, error) {
 }
 
 // Build does the work of running a particualur tag to creation.
-func (c *Config) Build(name string, helper IOHelper, cli DockerCli) error {
+func (c *Config) Build(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
 	node, isPresent := c.nameToNode[name]
 	if !isPresent {
 		return errors.New(fmt.Sprintf("no such target: %s", name))

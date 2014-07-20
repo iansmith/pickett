@@ -1,7 +1,8 @@
-package pickett
+package io
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,12 @@ var (
 	NO_DOCKER_HOST         = errors.New("no DOCKER_HOST found in environment, please set it")
 	BAD_DOCKER_HOST_FORMAT = errors.New("DOCKER_HOST found, but should be host:port")
 )
+
+//interestingPartsOfInspect is a utility for pulling things out of the json
+//returned by docker server inspect function.
+type interestingPartsOfInspect struct {
+	created marshaledTimeNano
+}
 
 // IOHelper abstracts IO to make things easier to test.
 type IOHelper interface {
@@ -41,7 +48,33 @@ type DockerCli interface {
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
+	DecodeInspect(...string) (Inspected, error)
 }
+
+type Inspected interface {
+	Created() time.Time
+}
+
+//marshaledTimeNano is a utility type to allow UnmarshalJSON to hang on a type
+//so we can unmarshal json conveniently to this type.
+type marshaledTimeNano time.Time
+
+//UnmarshalJSON turns something in RFC3339Nano form (which is used by Docker)
+//into a real timestamp.
+func (m *marshaledTimeNano) UnmarshalJSON(b []byte) error {
+	str := string(b)
+	str = strings.Trim(str, "\"")
+	t, err := time.Parse(time.RFC3339Nano, str)
+	if err != nil {
+		return err
+	}
+	*m = marshaledTimeNano(t)
+	return nil
+}
+
+var (
+	BAD_INSPECT_RESULT = errors.New("unable to understand result of docker inspect")
+)
 
 // NewIOHelper creates an implementation of the IOHelper that runs against
 // a real filesystem.  This is used when running normally.  The parameter
@@ -221,10 +254,30 @@ func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string)
 		fmt.Printf("[docker result error!] %v\n", err)
 		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
 	} else {
-		fmt.Printf("[docker result (%d)] %s\n", len(strings.Split(d.out.String(), "\n")),
+		fmt.Printf("[docker result (%d lines)] %s\n", len(strings.Split(d.out.String(), "\n")),
 			d.LastLineOfStdout())
 	}
 	return err
+}
+
+//DecodeInspect calls the nispect method of the docker CLI and then decodes the result.
+//THis call will fail if the underlying inspect fails.
+func (d *dockerCli) DecodeInspect(s ...string) (Inspected, error) {
+	err := d.CmdInspect(s...)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(d.out)
+	result := []interestingPartsOfInspect{}
+	err = dec.Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+	if len(result) != 1 {
+		return nil, BAD_INSPECT_RESULT
+	}
+	return &result[0], nil
+
 }
 
 func (d *dockerCli) CmdInspect(s ...string) error {
@@ -252,4 +305,8 @@ func (d *dockerCli) LastLineOfStdout() string {
 
 func (d *dockerCli) Stderr() string {
 	return d.err.String()
+}
+
+func (i *interestingPartsOfInspect) Created() time.Time {
+	return time.Time(i.created)
 }

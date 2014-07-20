@@ -6,7 +6,7 @@ import (
 
 	"code.google.com/p/gomock/gomock"
 
-	"github.com/igneoussystems/pickett/mock_pickett"
+	"github.com/igneoussystems/pickett/io"
 )
 
 var example1 = `
@@ -15,8 +15,8 @@ var example1 = `
 	"DockerBuildOptions" : ["-foo", "-bar"],
 	// a comment
 	"CodeVolume" : {
-		"Directory" : "/home/greedo/src",
-		"MountedAt" : "/mesa",  // stray comma?,
+		"Directory" : "/home/gredo/src",
+		"MountedAt" : "/han",  // stray comma?,
 		"SomeExtra" : "cruft"
 	},
 	"Sources" : [
@@ -28,42 +28,43 @@ var example1 = `
 	"Builds" : [
 		{
 			"RunIn" : "blah/bletch",
-			"InstallAndTestGoPackages": ["p1..", "p2/p3" ],
+			"InstallAndTestGoPackages": ["p1...", "p2/p3" ],
 			"Tag": "nashville"
 		},
 		{
 			"RunIn" : "blah/bletch",
-			"InstallAndTestGoPackages": ["p1..", "p2/p3" ],
+			"InstallGoPackages": ["p4...", "p5/p6" ],
 			"Tag": "chattanooga"
 		}
 	]
 }
 `
 
-func TestGoPackages(t *testing.T) {
-	c, err := NewConfigFile(strings.NewReader(example1))
-	if err != nil {
-		t.Errorf("Can't process correct config: %v", err)
-	}
-	if len(c.buildNames) == 2 {
-		if c.buildNames[0] != "nashville" || c.buildNames[1] != "chattanooga" {
-			t.Errorf("bad build names %s %s", c.buildNames[0], c.buildNames[1])
-		}
-	} else {
-		t.Errorf("wrong number of build names: %d", len(c.buildNames))
-	}
+func setupForExample1Conf(controller *gomock.Controller, helper *io.MockIOHelper) {
+	//ignore debug messages
+	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
+	helper.EXPECT().Debug(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	//for reading the conf
+	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
+	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)
 }
 
 func TestConf(t *testing.T) {
 	controller := gomock.NewController(t)
-	helper := NewMockIOHelper(controller)
-	helper.EXPECT().Find
+	defer controller.Finish()
 
-	c, err := NewConfig(strings.NewReader(example1))
+	helper := io.NewMockIOHelper(controller)
+	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
+
+	//the caller is just opening this for the error return, he ignores the file
+	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)
+
+	c, err := NewConfig(strings.NewReader(example1), helper)
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}
-	if c.CodeVolume.Directory != "/home/greedo/src" {
+	if c.CodeVolume.Directory != "/home/gredo/src" {
 		t.Errorf("failed to parse CodeVolume>Directory")
 	}
 	if len(c.DockerBuildOptions) != 2 {

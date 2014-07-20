@@ -1,11 +1,12 @@
 package pickett
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/igneoussystems/pickett/io"
 )
 
 // DockerBuildNode has a dependecy between the object to build and the image
@@ -23,7 +24,7 @@ type DockerBuildNode struct {
 
 // IsOutOfDate returns true if the tag that we are trying to produce is
 // before the tag of the image we depend on.
-func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerCli) (bool, error) {
+func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error) {
 	t, err := tagToTime(b.tag, cli)
 	if err != nil {
 		return false, err
@@ -31,10 +32,6 @@ func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerC
 	if t.IsZero() {
 		fmt.Printf("[pickett] Building %s (tag not found)\n", b.tag)
 		return true, nil
-	}
-	err = b.BringInboundUpToDate(conf, helper, cli)
-	if err != nil {
-		return false, err
 	}
 	if t.Before(b.runIn.Time()) {
 		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", b.tag, b.runIn.Name())
@@ -44,66 +41,58 @@ func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerC
 	return true, nil
 }
 
-func (b *DockerBuildNode) build(conf *Config, helper IOHelper, cli DockerCli) error {
-	var buffer, errOutput bytes.Buffer
+func (b *DockerBuildNode) build(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
 
 	args := []string{}
 	if conf.CodeVolume.Directory != "" {
 		args = append(args, "-v", conf.CodeVolume.Directory+":"+conf.CodeVolume.MountedAt)
 	}
-	cmd := "install"
-	if b.test {
-		cmd = "test"
-	}
-	var command string
-	if b.generic == "" {
-		command = fmt.Sprintf("%s go %s %s", b.runIn.Name(), cmd, b.pkgs[0])
+	if b.generic != "" {
+		command := fmt.Sprintf("%s %s", b.runIn.Name(), b.generic)
+		args = append(args, strings.Split(command, " ")...)
+		printRep := fmt.Sprintf("docker run %s", strings.Trim(fmt.Sprint(args), "[]"))
+		fmt.Printf("[pickett] %s\n", printRep)
+		err := cli.CmdRun(args...)
+		if err != nil {
+			return err
+		}
 	} else {
-		command = fmt.Sprintf("%s %s", b.runIn.Name(), b.generic)
+		cmd := "install"
+		if b.test {
+			cmd = "test"
+		}
+		for _, p := range b.pkgs {
+			command := fmt.Sprintf("%s go %s %s", b.runIn.Name(), cmd, p)
+			cmdArgs := append(args, strings.Split(command, " ")...)
+			printRep := fmt.Sprintf("docker run %s", strings.Trim(fmt.Sprint(cmdArgs), "[]"))
+			fmt.Printf("[pickett] %s\n", printRep)
+			err := cli.CmdRun(cmdArgs...)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	args = append(args, strings.Split(command, " ")...)
-	//why is this so hard?
-	var printRep bytes.Buffer
-	printRep.WriteString("docker run ")
-	for _, arg := range args {
-		printRep.WriteString(arg)
-		printRep.WriteString(" ")
-	}
-	fmt.Printf("[pickett] %s\n", printRep.String())
-	err := cli.CmdRun(args...)
+	err := cli.CmdPs("-q", "-l")
 	if err != nil {
-		fmt.Printf("%s\n", errOutput.String())
-		return err
+		return errors.New(fmt.Sprintf("failed trying to ps (%s): %v", b.tag, err))
 	}
-	buffer.Reset()
-	err = cli.CmdPs("-q", "-l")
-	if err != nil {
-		return errors.New(fmt.Sprintf("failed trying to tag %s: %v", b.tag, err))
-	}
-	id := strings.Trim(buffer.String(), "\n")
-	buffer.Reset()
-	err = cli.CmdCommit(id)
-	if err != nil {
-		return err
-	}
-	id = strings.Trim(buffer.String(), "\n")
-	err = cli.CmdTag(id, b.tag)
-	if err != nil {
-		return err
-	}
+	id := cli.LastLineOfStdout()
 	//command was ok, we need to tag it now
+	err = cli.CmdCommit(id, b.tag)
+	if err != nil {
+		return errors.New(fmt.Sprintf("failed trying to commit (%s): %v", b.tag, err))
+	}
 	return nil
 }
 
 //Build does the work of building a go package in a container. XXX we don't detect
 //if go is installed in the container. XXX
-func (b *DockerBuildNode) Build(conf *Config, helper IOHelper, cli DockerCli) error {
+func (b *DockerBuildNode) Build(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
 	helper.Debug("Building (%s) ...", b.Name())
 	err := b.BringInboundUpToDate(conf, helper, cli)
 	if err != nil {
 		return err
 	}
-
 	ood, err := b.IsOutOfDate(conf, helper, cli)
 	if err != nil {
 		return err
@@ -125,7 +114,7 @@ func (b *DockerBuildNode) IsSink() bool {
 
 //BringInboundUpToDate walks all the nodes that this node depends on
 //up to date.
-func (b *DockerBuildNode) BringInboundUpToDate(conf *Config, helper IOHelper, cli DockerCli) error {
+func (b *DockerBuildNode) BringInboundUpToDate(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
 	if err := b.runIn.Build(conf, helper, cli); err != nil {
 		return err
 	}
