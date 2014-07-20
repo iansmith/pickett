@@ -49,7 +49,7 @@ func TestGoPackagesFailPart2(t *testing.T) {
 	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
 		"p5/p6").Return(fakeErr).After(first)
 
-	if err := c.Build("chattanooga", helper, cli); err != fakeErr {
+	if err := c.Initiate("chattanooga", helper, cli); err != fakeErr {
 		t.Errorf("failed to get expected error: %v", err)
 	}
 }
@@ -73,6 +73,6 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	cli.EXPECT().LastLineOfStdout().Return(fakeContainer)
 	cli.EXPECT().CmdCommit(fakeContainer, "nashville")
 
-	c.Build("nashville", helper, cli)
+	c.Initiate("nashville", helper, cli)
 
 }

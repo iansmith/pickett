@@ -23,7 +23,7 @@ var (
 //interestingPartsOfInspect is a utility for pulling things out of the json
 //returned by docker server inspect function.
 type interestingPartsOfInspect struct {
-	created marshaledTimeNano
+	Created time.Time
 }
 
 // IOHelper abstracts IO to make things easier to test.
@@ -52,24 +52,7 @@ type DockerCli interface {
 }
 
 type Inspected interface {
-	Created() time.Time
-}
-
-//marshaledTimeNano is a utility type to allow UnmarshalJSON to hang on a type
-//so we can unmarshal json conveniently to this type.
-type marshaledTimeNano time.Time
-
-//UnmarshalJSON turns something in RFC3339Nano form (which is used by Docker)
-//into a real timestamp.
-func (m *marshaledTimeNano) UnmarshalJSON(b []byte) error {
-	str := string(b)
-	str = strings.Trim(str, "\"")
-	t, err := time.Parse(time.RFC3339Nano, str)
-	if err != nil {
-		return err
-	}
-	*m = marshaledTimeNano(t)
-	return nil
+	CreatedTime() time.Time
 }
 
 var (
@@ -253,9 +236,13 @@ func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string)
 	if err != nil && d.debug {
 		fmt.Printf("[docker result error!] %v\n", err)
 		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
-	} else {
-		fmt.Printf("[docker result (%d lines)] %s\n", len(strings.Split(d.out.String(), "\n")),
-			d.LastLineOfStdout())
+	} else if d.debug {
+		if d.out.String() != "" {
+			//fmt.Printf("string found '%s'\n", d.out.String())
+			fmt.Printf("[docker result (%d lines)] %s\n",
+				len(strings.Split(d.out.String(), "\n"))-1,
+				d.LastLineOfStdout())
+		}
 	}
 	return err
 }
@@ -298,6 +285,7 @@ func (d *dockerCli) LastLineOfStdout() string {
 	//there is a terminating \n on the last line, need to subtract 2 to get
 	//the last element of this slice
 	if len(lines) < 2 {
+		fmt.Printf("docker result '%s'\n", s)
 		panic("badly formed lines of output from docker command")
 	}
 	return lines[len(lines)-2]
@@ -307,6 +295,6 @@ func (d *dockerCli) Stderr() string {
 	return d.err.String()
 }
 
-func (i *interestingPartsOfInspect) Created() time.Time {
-	return time.Time(i.created)
+func (i *interestingPartsOfInspect) CreatedTime() time.Time {
+	return time.Time(i.Created)
 }

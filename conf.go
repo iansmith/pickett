@@ -182,8 +182,9 @@ func (c *Config) newDockerBuildNode(build *Build) (*DockerBuildNode, error) {
 	return result, nil
 }
 
-// Build does the work of running a particualur tag to creation.
-func (c *Config) Build(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
+// Initiate does the work of running from creation to a particular tag being "born".
+// Called by the "main()" of the pickett program if you provide a "target".
+func (c *Config) Initiate(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
 	node, isPresent := c.nameToNode[name]
 	if !isPresent {
 		return errors.New(fmt.Sprintf("no such target: %s", name))

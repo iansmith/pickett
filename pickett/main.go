@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/igneoussystems/pickett"
-	"github.com/igneoussystmes/pickett/io"
+	"github.com/igneoussystems/pickett/io"
 )
 
 // trueMain is the entry point of the program with the targets filled in
@@ -23,7 +23,7 @@ func trueMain(targets []string, helper io.IOHelper, cli io.DockerCli) {
 		targets = config.Sinks()
 	}
 	for _, target := range targets {
-		err := config.Build(target, helper, cli)
+		err := config.Initiate(target, helper, cli)
 		helper.CheckFatal(err, "%s: %v", target)
 	}
 }

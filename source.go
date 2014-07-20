@@ -10,6 +10,10 @@ import (
 	"github.com/igneoussystems/pickett/io"
 )
 
+const (
+	SUCCESS_MAGIC = "Successfully built "
+)
+
 //DockerSourceNode represents a node in the dependency graph that understands
 //about how to build a docker image.  This implements the Node interface.
 type DockerSourceNode struct {
@@ -36,7 +40,7 @@ func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
 		}
 		return time.Time{}, err
 	}
-	return time.Time(interesting.Created()), nil
+	return interesting.CreatedTime(), nil
 }
 
 //setTimestampOnImage sets the timestamp that docker has registered for a given image
@@ -146,11 +150,10 @@ func (d *DockerSourceNode) Build(config *Config, helper io.IOHelper, cli io.Dock
 	}
 
 	last_line := cli.LastLineOfStdout()
-	magic := "Successfully built "
-	if !strings.HasPrefix(last_line, magic) {
+	if !strings.HasPrefix(last_line, SUCCESS_MAGIC) {
 		panic("can't understand the success message from docker!")
 	}
-	id := last_line[len(magic):]
+	id := last_line[len(SUCCESS_MAGIC):]
 	err = cli.CmdTag("-f", id, d.name)
 	if err != nil {
 		return err
