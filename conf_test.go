@@ -6,7 +6,7 @@ import (
 
 	"code.google.com/p/gomock/gomock"
 
-	"igneous.io/pickett/mock_pickett"
+	"github.com/igneoussystems/pickett/mock_pickett"
 )
 
 var example1 = `

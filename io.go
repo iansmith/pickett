@@ -28,7 +28,6 @@ type IOHelper interface {
 	CheckFatal(error, string, ...interface{})
 	ConfigReader() io.Reader
 	ConfigFile() string
-	Docker() (DockerCli, error)
 	LastTimeInDirRelative(dir string) (time.Time, error)
 }
 
@@ -98,7 +97,7 @@ func (i *ioHelper) CheckFatal(err error, fmtSpec string, params ...interface{}) 
 // Return the true directory of a given directory that is relative to the
 // pickett config file.
 func (i *ioHelper) DirectoryRelative(dir string) string {
-	i.Debug("DirectoryRelative(%s)-->%s", dir, filepath.Clean(filepath.Join(i.pickettDir, dir)))
+	//i.Debug("DirectoryRelative(%s)-->%s", dir, filepath.Clean(filepath.Join(i.pickettDir, dir)))
 	return filepath.Clean(filepath.Join(i.pickettDir, dir))
 }
 
@@ -142,11 +141,14 @@ func (i *ioHelper) LastTimeInDirRelative(dir string) (time.Time, error) {
 	return last, nil
 }
 
-func (*ioHelper) Docker() (DockerCli, error) {
+//NewDocker returns a connection to the docker server.  Note that this is usually
+//only used by the driver program and most of the code inside picket assumes
+//that a DockerCli is passed in from the outside.
+func NewDocker(debug bool) (DockerCli, error) {
 	if err := validateDockerHost(); err != nil {
 		return nil, err
 	}
-	return newDockerCli(), nil
+	return newDockerCli(debug), nil
 }
 
 //validateDockerHost checks the environment for a sensible value for DOCKER_HOST.
@@ -154,29 +156,33 @@ func validateDockerHost() error {
 	if os.Getenv("DOCKER_HOST") == "" {
 		return NO_DOCKER_HOST
 	}
-	if len(strings.Split(os.Getenv("DOCKER_HOST"), ":")) != 2 {
-		return BAD_DOCKER_HOST_FORMAT
-	}
 	return nil
 }
 
 type dockerCli struct {
-	out *bytes.Buffer
-	err *bytes.Buffer
-	cli *docker.DockerCli
+	out   *bytes.Buffer
+	err   *bytes.Buffer
+	cli   *docker.DockerCli
+	debug bool
 }
 
 // newDockerCli builds a new docker interface and returns it. It
 // assumes that the DOCKER_HOST env var has already been
 // validated.
-func newDockerCli() DockerCli {
+func newDockerCli(debug bool) DockerCli {
 	result := &dockerCli{
-		out: new(bytes.Buffer),
-		err: new(bytes.Buffer),
+		out:   new(bytes.Buffer),
+		err:   new(bytes.Buffer),
+		debug: debug,
 	}
-	tee := io.MultiWriter(result.out, os.Stdout)
-	result.cli = docker.NewDockerCli(nil, tee, result.err,
-		"tcp", os.Getenv("DOCKER_HOST"), nil)
+
+	//tee := io.MultiWriter(result.out, os.Stdout)
+	parts := strings.Split(os.Getenv("DOCKER_HOST"), ":")
+	result.cli = docker.NewDockerCli(nil, result.out, result.err,
+		parts[0], parts[1], nil)
+	if debug {
+		fmt.Printf("[docker cmd] export DOCKER_HOST='%s'\n", os.Getenv("DOCKER_HOST"))
+	}
 	return result
 
 }
@@ -187,33 +193,46 @@ func (d *dockerCli) reset() {
 }
 
 func (d *dockerCli) CmdRun(s ...string) error {
-	d.reset()
-	return d.cli.CmdRun(s...)
+	return d.caller(d.cli.CmdRun, "run", s...)
 }
 
 func (d *dockerCli) CmdPs(s ...string) error {
-	d.reset()
-	return d.cli.CmdPs(s...)
+	return d.caller(d.cli.CmdPs, "ps", s...)
 }
 
 func (d *dockerCli) CmdTag(s ...string) error {
-	d.reset()
-	return d.cli.CmdTag(s...)
+	return d.caller(d.cli.CmdTag, "tag", s...)
 }
 
 func (d *dockerCli) CmdCommit(s ...string) error {
+	return d.caller(d.cli.CmdCommit, "commit", s...)
+}
+
+//caller calls the clientAPI of docker on a function of your choice.  This handles the debugging
+//output in a standard way so all docker commands and theere output look the same.
+func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string) error {
 	d.reset()
-	return d.cli.CmdCommit(s...)
+	if d.debug {
+		fmt.Printf("[docker cmd] docker %s %s\n", name,
+			strings.Trim(fmt.Sprint(s), "[]"))
+	}
+	err := fn(s...)
+	if err != nil && d.debug {
+		fmt.Printf("[docker result error!] %v\n", err)
+		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
+	} else {
+		fmt.Printf("[docker result (%d)] %s\n", len(strings.Split(d.out.String(), "\n")),
+			d.LastLineOfStdout())
+	}
+	return err
 }
 
 func (d *dockerCli) CmdInspect(s ...string) error {
-	d.reset()
-	return d.cli.CmdInspect(s...)
+	return d.caller(d.cli.CmdInspect, "inspect", s...)
 }
 
 func (d *dockerCli) CmdBuild(s ...string) error {
-	d.reset()
-	return d.cli.CmdBuild(s...)
+	return d.caller(d.cli.CmdBuild, "build", s...)
 }
 
 func (d *dockerCli) Stdout() string {

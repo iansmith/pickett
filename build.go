@@ -23,8 +23,8 @@ type DockerBuildNode struct {
 
 // IsOutOfDate returns true if the tag that we are trying to produce is
 // before the tag of the image we depend on.
-func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper) (bool, error) {
-	t, err := tagToTime(b.tag, helper)
+func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerCli) (bool, error) {
+	t, err := tagToTime(b.tag, cli)
 	if err != nil {
 		return false, err
 	}
@@ -32,7 +32,7 @@ func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper) (bool, erro
 		fmt.Printf("[pickett] Building %s (tag not found)\n", b.tag)
 		return true, nil
 	}
-	err = b.BringInboundUpToDate(conf, helper)
+	err = b.BringInboundUpToDate(conf, helper, cli)
 	if err != nil {
 		return false, err
 	}
@@ -44,13 +44,9 @@ func (b *DockerBuildNode) IsOutOfDate(conf *Config, helper IOHelper) (bool, erro
 	return true, nil
 }
 
-func (b *DockerBuildNode) build(conf *Config, helper IOHelper) error {
+func (b *DockerBuildNode) build(conf *Config, helper IOHelper, cli DockerCli) error {
 	var buffer, errOutput bytes.Buffer
 
-	cli, err := helper.Docker()
-	if err != nil {
-		return err
-	}
 	args := []string{}
 	if conf.CodeVolume.Directory != "" {
 		args = append(args, "-v", conf.CodeVolume.Directory+":"+conf.CodeVolume.MountedAt)
@@ -74,7 +70,7 @@ func (b *DockerBuildNode) build(conf *Config, helper IOHelper) error {
 		printRep.WriteString(" ")
 	}
 	fmt.Printf("[pickett] %s\n", printRep.String())
-	err = cli.CmdRun(args...)
+	err := cli.CmdRun(args...)
 	if err != nil {
 		fmt.Printf("%s\n", errOutput.String())
 		return err
@@ -101,14 +97,14 @@ func (b *DockerBuildNode) build(conf *Config, helper IOHelper) error {
 
 //Build does the work of building a go package in a container. XXX we don't detect
 //if go is installed in the container. XXX
-func (b *DockerBuildNode) Build(conf *Config, helper IOHelper) error {
-	helper.Debug("BUILD(%s)", b.Name())
-	err := b.BringInboundUpToDate(conf, helper)
+func (b *DockerBuildNode) Build(conf *Config, helper IOHelper, cli DockerCli) error {
+	helper.Debug("Building (%s) ...", b.Name())
+	err := b.BringInboundUpToDate(conf, helper, cli)
 	if err != nil {
 		return err
 	}
 
-	ood, err := b.IsOutOfDate(conf, helper)
+	ood, err := b.IsOutOfDate(conf, helper, cli)
 	if err != nil {
 		return err
 	}
@@ -116,7 +112,7 @@ func (b *DockerBuildNode) Build(conf *Config, helper IOHelper) error {
 		fmt.Printf("[pickett] %s is up to date.\n", b.tag)
 		return nil
 	}
-	if err := b.build(conf, helper); err != nil {
+	if err := b.build(conf, helper, cli); err != nil {
 		return err
 	}
 	return nil
@@ -129,8 +125,8 @@ func (b *DockerBuildNode) IsSink() bool {
 
 //BringInboundUpToDate walks all the nodes that this node depends on
 //up to date.
-func (b *DockerBuildNode) BringInboundUpToDate(conf *Config, helper IOHelper) error {
-	if err := b.runIn.Build(conf, helper); err != nil {
+func (b *DockerBuildNode) BringInboundUpToDate(conf *Config, helper IOHelper, cli DockerCli) error {
+	if err := b.runIn.Build(conf, helper, cli); err != nil {
 		return err
 	}
 	return nil

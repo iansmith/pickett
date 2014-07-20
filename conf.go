@@ -64,8 +64,12 @@ func NewConfig(reader io.Reader, helper IOHelper) (*Config, error) {
 		return nil, err
 	}
 	conf.nameToNode = make(map[string]Node)
-	conf.dockerSourceNodes(helper)
-	conf.dockerBuildNodes()
+	if err := conf.dockerSourceNodes(helper); err != nil {
+		return nil, err
+	}
+	if _, err := conf.dockerBuildNodes(); err != nil {
+		return nil, err
+	}
 	return conf, nil
 }
 
@@ -73,7 +77,6 @@ func NewConfig(reader io.Reader, helper IOHelper) (*Config, error) {
 // and returns them in a list.  The edges between the nodes are already
 // in place when this function completes.
 func (c *Config) dockerSourceNodes(helper IOHelper) error {
-
 	for _, img := range c.Sources {
 		n, err := c.newDockerSourceNode(img, helper)
 		if err != nil {
@@ -178,10 +181,10 @@ func (c *Config) newDockerBuildNode(build *Build) (*DockerBuildNode, error) {
 }
 
 // Build does the work of running a particualur tag to creation.
-func (c *Config) Build(name string, helper IOHelper) error {
+func (c *Config) Build(name string, helper IOHelper, cli DockerCli) error {
 	node, isPresent := c.nameToNode[name]
 	if !isPresent {
 		return errors.New(fmt.Sprintf("no such target: %s", name))
 	}
-	return node.Build(c, helper)
+	return node.Build(c, helper, cli)
 }

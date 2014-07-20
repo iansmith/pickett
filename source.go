@@ -51,15 +51,9 @@ var (
 
 //helper func to look up the timestamp for a given tag in docker. The input
 //can be a tag or an id.
-func tagToTime(tag string, helper IOHelper) (time.Time, error) {
+func tagToTime(tag string, cli DockerCli) (time.Time, error) {
 	var buffer bytes.Buffer
-
-	cli, err := helper.Docker()
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	err = cli.CmdInspect(tag)
+	err := cli.CmdInspect(tag)
 	if err != nil {
 		statusErr, ok := err.(*docker_utils.StatusError)
 		if !ok {
@@ -87,10 +81,15 @@ func tagToTime(tag string, helper IOHelper) (time.Time, error) {
 //setTimestampOnImage sets the timestamp that docker has registered for a given image
 //name.  The name given should be unique.  If no image with the name can be found,
 //the zero value of time.Time is returned, not an error.  Any error is likely fatal.
-func (d *DockerSourceNode) setTimestampOnImage(helper IOHelper) error {
-	t, err := tagToTime(d.name, helper)
+func (d *DockerSourceNode) setTimestampOnImage(helper IOHelper, cli DockerCli) error {
+	t, err := tagToTime(d.name, cli)
 	if err != nil {
 		return err
+	}
+	if t.IsZero() {
+		helper.Debug("setTimestampOnImage %s: doesn't exist", d.name)
+	} else {
+		helper.Debug("setTimestampOnImage %s to be %v", d.name, t)
 	}
 	d.imgTime = t
 	return nil
@@ -99,11 +98,11 @@ func (d *DockerSourceNode) setTimestampOnImage(helper IOHelper) error {
 //setLastTimeOnDirectoryEntry looks at the directory in the node and returns the latest
 //modification time found on a file in that directory.
 func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper IOHelper) error {
-	helper.Debug("setLastTimeOnDirectoryEntry(%s)", d.dir)
 	last, err := helper.LastTimeInDirRelative(d.dir)
 	if err != nil {
 		return err
 	}
+	helper.Debug("setLastTimeOnDirectoryEntry(%s) to be %v", d.dir, last)
 	d.dirTime = last
 	return nil
 }
@@ -111,12 +110,12 @@ func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper IOHelper) error {
 //IsOutOfDateCompares a docker image time to the latest timestamp in the directory
 //that holds the dockerfile.  Note that an image that is unknown is not out of date
 //with respect to an empty directory (time stamps are equal).
-func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper IOHelper) (bool, error) {
+func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper IOHelper, cli DockerCli) (bool, error) {
 	if err := d.setLastTimeOnDirectoryEntry(helper); err != nil {
 		return false, err
 	}
 
-	if err := d.setTimestampOnImage(helper); err != nil {
+	if err := d.setTimestampOnImage(helper, cli); err != nil {
 		return false, err
 	}
 
@@ -142,9 +141,9 @@ func (d *DockerSourceNode) Time() time.Time {
 
 //BringInboundUpToDate walks all the inbound edges and calls Build() on each one.
 //This process is recursive.
-func (d *DockerSourceNode) BringInboundUpToDate(config *Config, helper IOHelper) error {
+func (d *DockerSourceNode) BringInboundUpToDate(config *Config, helper IOHelper, cli DockerCli) error {
 	for _, in := range d.in {
-		if err := in.Build(config, helper); err != nil {
+		if err := in.Build(config, helper, cli); err != nil {
 			return err
 		}
 	}
@@ -162,15 +161,15 @@ func (s *DockerSourceNode) Name() string {
 }
 
 //Build constructs a new image based on a directory that has a dockerfile. It
-//calls the docker server to actually perform the build.
-func (d *DockerSourceNode) Build(config *Config, helper IOHelper) error {
-	helper.Debug("BUILD(%s)", d.Name())
-	err := d.BringInboundUpToDate(config, helper)
+//calls the docker server to actuallyli perform the build.
+func (d *DockerSourceNode) Build(config *Config, helper IOHelper, cli DockerCli) error {
+	helper.Debug("Building '%s'...", d.Name())
+	err := d.BringInboundUpToDate(config, helper, cli)
 	if err != nil {
 		return err
 	}
 
-	b, err := d.IsOutOfDate(config, helper)
+	b, err := d.IsOutOfDate(config, helper, cli)
 	if err != nil {
 		return err
 	}
@@ -179,14 +178,7 @@ func (d *DockerSourceNode) Build(config *Config, helper IOHelper) error {
 		return nil
 	}
 
-	//var buffer bytes.Buffer
-	//multi := io.MultiWriter(&buffer, os.Stdout)
-	cli, err := helper.Docker()
-	if err != nil {
-		return err
-	}
-
-	buildOpts := append(config.DockerBuildOptions, d.dir)
+	buildOpts := append(config.DockerBuildOptions, helper.DirectoryRelative(d.dir))
 	err = cli.CmdBuild(buildOpts...)
 	if err != nil {
 		return err
@@ -203,7 +195,7 @@ func (d *DockerSourceNode) Build(config *Config, helper IOHelper) error {
 		return err
 	}
 	//read it back from docker to get the new time
-	d.setTimestampOnImage(helper)
+	d.setTimestampOnImage(helper, cli)
 	return nil
 }
 

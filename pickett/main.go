@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"igneous.io/pickett"
+	"github.com/igneoussystems/pickett"
 )
 
 // trueMain is the entry point of the program with the targets filled in
 // and a working helper.
-func trueMain(targets []string, helper pickett.IOHelper) {
+func trueMain(targets []string, helper pickett.IOHelper, cli pickett.DockerCli) {
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper)
 	helper.CheckFatal(err, "can't understand config file %s: %v", helper.ConfigFile())
@@ -22,7 +22,7 @@ func trueMain(targets []string, helper pickett.IOHelper) {
 		targets = config.Sinks()
 	}
 	for _, target := range targets {
-		err := config.Build(target, helper)
+		err := config.Build(target, helper, cli)
 		helper.CheckFatal(err, "%s: %v", target)
 	}
 }
@@ -51,6 +51,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[pickett] can't read %s: %v\n", configFile, err)
 		os.Exit(1)
 	}
-	trueMain(rest, helper)
+	cli, err := pickett.NewDocker(debug)
+	helper.CheckFatal(err, "failed to connect to docker server, maybe its not running? %v")
+	trueMain(rest, helper, cli)
 	os.Exit(0)
 }
