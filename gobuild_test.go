@@ -9,7 +9,7 @@ import (
 	"code.google.com/p/gomock/gomock"
 	docker_utils "github.com/dotcloud/docker/utils"
 
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett/io"
 )
 
 func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHelper, cli *io.MockDockerCli) *Config {

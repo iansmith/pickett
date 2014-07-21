@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/igneoussystems/pickett"
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett"
+	"github.com/igneous-systems/pickett/io"
 )
 
 // trueMain is the entry point of the program with the targets filled in

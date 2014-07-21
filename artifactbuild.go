@@ -3,7 +3,7 @@ package pickett
 import (
 	"errors"
 	"fmt"
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett/io"
 	"time"
 )
 

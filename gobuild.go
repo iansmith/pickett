@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett/io"
 )
 
 // goworker has a dependecy between the object to build and the image

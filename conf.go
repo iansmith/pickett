@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	pickett_io "github.com/igneoussystems/pickett/io"
+	pickett_io "github.com/igneous-systems/pickett/io"
 )
 
 type Source struct {

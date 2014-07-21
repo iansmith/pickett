@@ -3,7 +3,7 @@ package pickett
 import (
 	"time"
 
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett/io"
 )
 
 //worker is the specific portion of a node that understands the semantics of the particular

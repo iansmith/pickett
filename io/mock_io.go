@@ -4,9 +4,9 @@
 package io
 
 import (
+	gomock "code.google.com/p/gomock/gomock"
 	io "io"
 	time "time"
-	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of IOHelper interface

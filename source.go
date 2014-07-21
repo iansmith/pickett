@@ -7,7 +7,7 @@ import (
 
 	docker_utils "github.com/dotcloud/docker/utils"
 
-	"github.com/igneoussystems/pickett/io"
+	"github.com/igneous-systems/pickett/io"
 )
 
 const (
