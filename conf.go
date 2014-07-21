@@ -79,7 +79,7 @@ func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 		return nil, err
 	}
 	conf.nameToNode = make(map[string]Node)
-	if err := conf.dockerSourceNodes(helper); err != nil {
+	if err := conf.sourceNodes(helper); err != nil {
 		return nil, err
 	}
 	if _, err := conf.goBuildNodes(); err != nil {
@@ -91,20 +91,22 @@ func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 	return conf, nil
 }
 
-// dockerSourceNodes walks all the nodes defined in the configuration file
+// sourceNodes walks all the nodes defined in the configuration file
 // and returns them in a list.  The edges between the nodes are already
 // in place when this function completes.
-func (c *Config) dockerSourceNodes(helper pickett_io.IOHelper) error {
+func (c *Config) sourceNodes(helper pickett_io.IOHelper) error {
 	for _, img := range c.Sources {
-		n, err := c.newDockerSourceNode(img, helper)
+		w, err := c.newSourceWorker(img, helper)
 		if err != nil {
 			return err
 		}
-		c.nameToNode[img.Tag] = n
+		node := newNodeImpl(img.Tag, w)
+		c.nameToNode[img.Tag] = node
 	}
 	//make a pass adding edges
 	for _, img := range c.Sources {
-		dest := c.nameToNode[img.Tag].(*DockerSourceNode)
+		dest := c.nameToNode[img.Tag]
+		work := dest.Worker().(*sourceWorker)
 		for _, source := range img.DependsOn {
 			node_source, ok := c.nameToNode[source]
 			if !ok {
@@ -112,7 +114,7 @@ func (c *Config) dockerSourceNodes(helper pickett_io.IOHelper) error {
 					img.Tag, source, source))
 			}
 			node_source.AddOut(dest)
-			dest.in = append(dest.in, node_source)
+			work.inEdges = append(work.inEdges, node_source)
 		}
 	}
 	return nil
@@ -133,20 +135,25 @@ func (c *Config) Sinks() []string {
 // goBuildNodes returns all the go build nodes in the pickett file.  Note that
 // this should not be called until after the dockerSourceNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) goBuildNodes() ([]*GoBuildNode, error) {
-	var result []*GoBuildNode
+func (c *Config) goBuildNodes() ([]Node, error) {
+	var result []Node
 	for _, build := range c.GoBuilds {
-		node, err := c.newGoBuildNode(build)
+		w, err := c.newGoWorker(build)
 		if err != nil {
 			return nil, err
 		}
-		n, found := c.nameToNode[build.RunIn]
+		r, found := c.nameToNode[build.RunIn]
 		if !found {
 			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
 				build.RunIn, build.Tag))
 		}
-		node.runIn = n
-		n.AddOut(node)
+
+		//add edges
+		w.runIn = r
+		node := newNodeImpl(build.Tag, w)
+		r.AddOut(node)
+
+		//compute result
 		result = append(result, node)
 		c.nameToNode[build.Tag] = node
 	}
@@ -154,45 +161,52 @@ func (c *Config) goBuildNodes() ([]*GoBuildNode, error) {
 }
 
 // artifactBuildNodes returns all theartifact build nodes in the pickett file.  Note that
-// this should not be called until after the dockerSourceNodes() have been
+// this should not be called until after the dockerSourceNodes() and goBuildNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) artifactBuildNodes() ([]*ArtifactBuildNode, error) {
-	var result []*ArtifactBuildNode
+func (c *Config) artifactBuildNodes() ([]Node, error) {
+	var result []Node
 	for _, build := range c.ArtifactBuilds {
-		node, err := c.newArtifactBuildNode(build)
+		w, err := c.newArtifactWorker(build)
 		if err != nil {
 			return nil, err
 		}
-		n, found := c.nameToNode[build.RunIn]
+		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build RunIn '%s'",
 				build.RunIn, build.Tag))
 		}
 		m, found := c.nameToNode[build.MergeWith]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build MergeWith of  '%s'",
 				build.MergeWith, build.Tag))
 		}
-		node.runIn = n
-		n.AddOut(node)
-		node.mergeWith = m
+		// handle dependency edges
+		if _, ok := r.Worker().(*goWorker); !ok {
+			return nil, errors.New(fmt.Sprintf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
+				build.Tag, r.Name()))
+		}
+		w.runIn = r
+		w.mergeWith = m
+		node := newNodeImpl(build.Tag, w)
+		r.AddOut(node)
 		m.AddOut(node)
+		// now build the node and put it in the map + result
 		result = append(result, node)
 		c.nameToNode[build.Tag] = node
 	}
 	return result, nil
 }
 
-// newDockerSource returns a DockerSourceNode from the configuration information
+// newSourceWorker returns a sourceWorker from the configuration information
 // provided in the pickett file.  Note that this does some sanity checking of
 // the provided directory so this can fail.  It uses the path to the
 // Pickett.json file to construct paths such that the directory is relative
 // to the place where the Pickett.json is located.  This ignores the issue
 // of edges.
-func (c *Config) newDockerSourceNode(src *Source, helper pickett_io.IOHelper) (*DockerSourceNode, error) {
-	node := &DockerSourceNode{
-		name: src.Tag,
-		dir:  src.Directory,
+func (c *Config) newSourceWorker(src *Source, helper pickett_io.IOHelper) (*sourceWorker, error) {
+	node := &sourceWorker{
+		tag: src.Tag,
+		dir: src.Directory,
 	}
 	_, err := helper.OpenDockerfileRelative(src.Directory)
 	if err != nil {
@@ -202,11 +216,11 @@ func (c *Config) newDockerSourceNode(src *Source, helper pickett_io.IOHelper) (*
 	return node, nil
 }
 
-// newGoBuildNode returns a GoBuildNode from the configuration information
+// newGoWorker returns a goWorker from the configuration information
 // provided in the pickett file. This sanity checks the config file, so it can
-// fail.
-func (c *Config) newGoBuildNode(build *GoBuild) (*GoBuildNode, error) {
-	result := &GoBuildNode{
+// fail.  It ignores dependency edges.
+func (c *Config) newGoWorker(build *GoBuild) (*goWorker, error) {
+	result := &goWorker{
 		tag: build.Tag,
 	}
 	if len(build.InstallGoPackages) != 0 && len(build.InstallAndTestGoPackages) != 0 {
@@ -223,17 +237,26 @@ func (c *Config) newGoBuildNode(build *GoBuild) (*GoBuildNode, error) {
 	return result, nil
 }
 
-// newArtifactBuildNode returns an ArtifactBuildNode from the configuration information
+// newArtifactWorker returns a worker from the configuration information
 // provided in the pickett file. This sanity checks the config file, so it can
-// fail.
-func (c *Config) newArtifactBuildNode(build *ArtifactBuild) (*ArtifactBuildNode, error) {
-	result := &ArtifactBuildNode{
-		tag: build.Tag,
-	}
+// fail. It ignores dependency edges.
+func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error) {
 	if len(build.Artifacts) == 0 {
-		return nil, errors.New(fmt.Sprintf("%s must define at leasnt one artifact", build.Tag))
+		return nil, errors.New(fmt.Sprintf("%s must define at least one artifact", build.Tag))
 	}
-	return result, nil
+	art := make(map[string]string)
+	for k, v := range build.Artifacts {
+		s, ok := v.(string)
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("%v must be a string (in artifacts of %s)!", v, build.Tag))
+		}
+		art[k] = s
+	}
+	worker := &artifactWorker{
+		artifacts: art,
+		tag:       build.Tag,
+	}
+	return worker, nil
 }
 
 // Initiate does the work of running from creation to a particular tag being "born".

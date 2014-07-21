@@ -14,15 +14,14 @@ const (
 	SUCCESS_MAGIC = "Successfully built "
 )
 
-//DockerSourceNode represents a node in the dependency graph that understands
-//about how to build a docker image.  This implements the Node interface.
-type DockerSourceNode struct {
-	name    string
+//sourceWorker represents a node in the dependency graph that understands
+//about how to build a docker image.  This implements the worker interface.
+type sourceWorker struct {
+	tag     string
 	dir     string
 	imgTime time.Time
 	dirTime time.Time
-	in      []Node
-	out     []Node
+	inEdges []Node
 }
 
 //helper func to look up the timestamp for a given tag in docker. The input
@@ -43,26 +42,24 @@ func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
 	return interesting.CreatedTime(), nil
 }
 
-//setTimestampOnImage sets the timestamp that docker has registered for a given image
-//name.  The name given should be unique.  If no image with the name can be found,
-//the zero value of time.Time is returned, not an error.  Any error is likely fatal.
-func (d *DockerSourceNode) setTimestampOnImage(helper io.IOHelper, cli io.DockerCli) error {
-	t, err := tagToTime(d.name, cli)
+//setTimestampOnImage sets the timestamp that docker has registered for this image.
+func (d *sourceWorker) setTimestampOnImage(helper io.IOHelper, cli io.DockerCli) error {
+	t, err := tagToTime(d.tag, cli)
 	if err != nil {
 		return err
 	}
 	if t.IsZero() {
-		helper.Debug("setTimestampOnImage %s: doesn't exist", d.name)
+		helper.Debug("setTimestampOnImage %s: doesn't exist", d.tag)
 	} else {
-		helper.Debug("setTimestampOnImage %s to be %v", d.name, t)
+		helper.Debug("setTimestampOnImage %s to be %v", d.tag, t)
 	}
 	d.imgTime = t
 	return nil
 }
 
-//setLastTimeOnDirectoryEntry looks at the directory in the node and returns the latest
+//setLastTimeOnDirectoryEntry looks at the directory in this worker and returns the latest
 //modification time found on a file in that directory.
-func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper io.IOHelper) error {
+func (d *sourceWorker) setLastTimeOnDirectoryEntry(helper io.IOHelper) error {
 	last, err := helper.LastTimeInDirRelative(d.dir)
 	if err != nil {
 		return err
@@ -72,81 +69,44 @@ func (d *DockerSourceNode) setLastTimeOnDirectoryEntry(helper io.IOHelper) error
 	return nil
 }
 
-//IsOutOfDateCompares a docker image time to the latest timestamp in the directory
+//ood compares a docker image time to the latest timestamp in the directory
 //that holds the dockerfile.  Note that an image that is unknown is not out of date
-//with respect to an empty directory (time stamps are equal).
-func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error) {
+//with respect to an empty directory (time stamps are equal).  This returns the image
+//time if we say false or "this is not ood".
+func (d *sourceWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, bool, error) {
 	if err := d.setLastTimeOnDirectoryEntry(helper); err != nil {
-		return false, err
+		return time.Time{}, true, err
 	}
 
 	if err := d.setTimestampOnImage(helper, cli); err != nil {
-		return false, err
+		return time.Time{}, true, err
 	}
 
 	if d.dirTime.After(d.imgTime) {
-		fmt.Printf("[pickett] '%s' needs to be rebuilt (source directory %s is newer)\n", d.name, d.dir)
-		return true, nil
+		fmt.Printf("[pickett] '%s' needs to be rebuilt (source directory %s is newer)\n", d.tag, d.dir)
+		return time.Time{}, true, nil
 	}
 
-	for _, in := range d.in {
-		if d.imgTime.Before(in.Time()) {
-			fmt.Printf("[pickett] '%s' needs to be rebuilt ('%s' is newer)\n",
-				d.name, in.Name())
-			return true, nil
+	for _, edge := range d.inEdges {
+		if d.imgTime.Before(edge.Time()) {
+			fmt.Printf("[pickett] '%s' needs to be rebuilt (because '%s' is newer)\n",
+				d.tag, edge.Name())
+			return time.Time{}, true, nil
 		}
 	}
-	return false, nil
-}
-
-//Time returns the most recently built time for this node type.
-func (d *DockerSourceNode) Time() time.Time {
-	return d.imgTime
-}
-
-//BringInboundUpToDate walks all the inbound edges and calls Build() on each one.
-//This process is recursive.
-func (d *DockerSourceNode) BringInboundUpToDate(config *Config, helper io.IOHelper, cli io.DockerCli) error {
-	for _, in := range d.in {
-		if err := in.Build(config, helper, cli); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-//AddOut adds an outgoing edge.
-func (s *DockerSourceNode) AddOut(n Node) {
-	s.out = append(s.out, n)
-}
-
-//Name prints the name of this node for a human to consume
-func (s *DockerSourceNode) Name() string {
-	return s.name
+	fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.tag)
+	return d.imgTime, false, nil
 }
 
 //Build constructs a new image based on a directory that has a dockerfile. It
-//calls the docker server to actuallyli perform the build.
-func (d *DockerSourceNode) Build(config *Config, helper io.IOHelper, cli io.DockerCli) error {
-	helper.Debug("Building '%s'...", d.Name())
-	err := d.BringInboundUpToDate(config, helper, cli)
-	if err != nil {
-		return err
-	}
-
-	b, err := d.IsOutOfDate(config, helper, cli)
-	if err != nil {
-		return err
-	}
-	if !b {
-		fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.name)
-		return nil
-	}
+//calls the docker server to actually perform the build.
+func (d *sourceWorker) build(config *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, error) {
+	helper.Debug("Building '%s'...", d.tag)
 
 	buildOpts := append(config.DockerBuildOptions, helper.DirectoryRelative(d.dir))
-	err = cli.CmdBuild(buildOpts...)
+	err := cli.CmdBuild(buildOpts...)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 
 	last_line := cli.LastLineOfStdout()
@@ -154,16 +114,15 @@ func (d *DockerSourceNode) Build(config *Config, helper io.IOHelper, cli io.Dock
 		panic("can't understand the success message from docker!")
 	}
 	id := last_line[len(SUCCESS_MAGIC):]
-	err = cli.CmdTag("-f", id, d.name)
+	err = cli.CmdTag("-f", id, d.tag)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	//read it back from docker to get the new time
 	d.setTimestampOnImage(helper, cli)
-	return nil
+	return d.imgTime, nil
 }
 
-//IsSink is true if this node has no edges from it.
-func (d *DockerSourceNode) IsSink() bool {
-	return len(d.out) == 0
+func (s *sourceWorker) in() []Node {
+	return s.inEdges
 }

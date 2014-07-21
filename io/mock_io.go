@@ -226,6 +226,20 @@ func (_mr *_MockDockerCliRecorder) CmdBuild(arg0 ...interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdBuild", arg0...)
 }
 
+func (_m *MockDockerCli) CmdCp(_param0 ...string) error {
+	_s := []interface{}{}
+	for _, _x := range _param0 {
+		_s = append(_s, _x)
+	}
+	ret := _m.ctrl.Call(_m, "CmdCp", _s...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdCp(arg0 ...interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCp", arg0...)
+}
+
 func (_m *MockDockerCli) Stdout() string {
 	ret := _m.ctrl.Call(_m, "Stdout")
 	ret0, _ := ret[0].(string)

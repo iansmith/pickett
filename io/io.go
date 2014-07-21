@@ -45,6 +45,7 @@ type DockerCli interface {
 	CmdCommit(...string) error
 	CmdInspect(...string) error
 	CmdBuild(...string) error
+	CmdCp(...string) error
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
@@ -223,6 +224,10 @@ func (d *dockerCli) CmdTag(s ...string) error {
 
 func (d *dockerCli) CmdCommit(s ...string) error {
 	return d.caller(d.cli.CmdCommit, "commit", s...)
+}
+
+func (d *dockerCli) CmdCp(s ...string) error {
+	return d.caller(d.cli.CmdCp, "cp", s...)
 }
 
 //caller calls the clientAPI of docker on a function of your choice.  This handles the debugging

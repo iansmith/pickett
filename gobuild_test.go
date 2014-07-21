@@ -12,7 +12,7 @@ import (
 	"github.com/igneoussystems/pickett/io"
 )
 
-func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHelper, cli *io.MockDockerCli, tag string) *Config {
+func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHelper, cli *io.MockDockerCli) *Config {
 	setupForExample1Conf(controller, helper)
 	//ignoring error is ok because tested in TestConf
 	c, _ := NewConfig(strings.NewReader(example1), helper)
@@ -25,13 +25,6 @@ func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHel
 	insp.EXPECT().CreatedTime().Return(now)
 	cli.EXPECT().DecodeInspect("blah/bletch").Return(insp, nil)
 
-	fakeInspectError := &docker_utils.StatusError{
-		StatusCode: 1,
-	}
-
-	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src")
-	cli.EXPECT().DecodeInspect(tag).Return(nil, fakeInspectError)
-
 	return c
 }
 
@@ -42,7 +35,17 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	cli := io.NewMockDockerCli(controller)
 	helper := io.NewMockIOHelper(controller)
 
-	c := setupForDontBuildBletch(controller, helper, cli, "chattanooga")
+	c := setupForDontBuildBletch(controller, helper, cli)
+
+	//this is called to figure out how to mount the source... we don't care how many
+	//times this happens
+	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
+
+	//we want to start a build of "chattanooga"
+	fakeInspectError := &docker_utils.StatusError{
+		StatusCode: 1,
+	}
+	cli.EXPECT().DecodeInspect("chattanooga").Return(nil, fakeInspectError)
 
 	// mock out the docker api calls to build the software
 	first := cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
@@ -63,18 +66,96 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	cli := io.NewMockDockerCli(controller)
 	helper := io.NewMockIOHelper(controller)
 
-	c := setupForDontBuildBletch(controller, helper, cli, "nashville")
+	c := setupForDontBuildBletch(controller, helper, cli)
 
-	// mock out the docker api calls to build the software
-	first := cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	//this is called to figure out how to mount the source... we don't care how many
+	//times this happens
+	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
+
+	//we want to start a build of "nashville" when we are first asked, but the second
+	//time we want to give the current time
+	fakeInspectError := &docker_utils.StatusError{
+		StatusCode: 1,
+	}
+	now := time.Now()
+	insp := io.NewMockInspected(controller)
+	insp.EXPECT().CreatedTime().Return(now)
+	first := cli.EXPECT().DecodeInspect("nashville").Return(nil, fakeInspectError)
+	cli.EXPECT().DecodeInspect("nashville").Return(insp, nil).After(first)
+
+	// test we are already sure we need to build, so we don't test to see if OOD
+	// via go, just run the build
+	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"p1...")
 	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
-		"p2/p3").After(first)
+		"p2/p3")
+
+	//after we build successfully, we use "ps -q -l" to check to see the id of
+	//the container that we built in
+	expectContainerPSAndCommit(cli)
+
+	//hit it!
+	c.Initiate("nashville", helper, cli)
+}
+
+func expectContainerPSAndCommit(cli *io.MockDockerCli) {
 	cli.EXPECT().CmdPs("-q", "-l").Return(nil)
 	fakeContainer := "1234ffee5678"
 	cli.EXPECT().LastLineOfStdout().Return(fakeContainer)
 	cli.EXPECT().CmdCommit(fakeContainer, "nashville")
+}
 
+func TestGoPackagesOODOnSource(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	cli := io.NewMockDockerCli(controller)
+	helper := io.NewMockIOHelper(controller)
+
+	c := setupForDontBuildBletch(controller, helper, cli)
+
+	//this is called to figure out how to mount the source... we don't care how many
+	//times this happens
+	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
+
+	//we want to suggest that the nashville container was built recently when first
+	//asked... we will be asked a second time, but it gets discarded so we just
+	//do the same thing both times
+	now := time.Now()
+	insp := io.NewMockInspected(controller)
+	insp.EXPECT().CreatedTime().Return(now).Times(2)
+	cli.EXPECT().DecodeInspect("nashville").Return(insp, nil).Times(2)
+
+	//
+	// this is the test of how the go source OOD really works
+	//
+
+	// test for code build needed, then build it
+	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+		"-n", "p1...")
+	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+		"p1...")
+
+	//test for code build needed, then build it
+	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+		"-n", "p2/p3")
+	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+		"p2/p3")
+
+	//
+	//Fake the results of the two "probes" with -n, we want to return true (meaning that
+	//there is no output, thus to code is up to date) on the first one.  we return false
+	//on the second one and it needs to be the second one because the system won't
+	//bother asking about the second one if the first one already means we are OOD
+	//
+	first := cli.EXPECT().EmptyOutput().Return(true)
+	cli.EXPECT().EmptyOutput().Return(false).After(first)
+
+	//after we build successfully, we use "ps -q -l" to check to see the id of
+	//the container that we built in.
+	expectContainerPSAndCommit(cli)
+
+	//hit it!
 	c.Initiate("nashville", helper, cli)
 
 }
