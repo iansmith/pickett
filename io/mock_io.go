@@ -256,6 +256,16 @@ func (_mr *_MockDockerCliRecorder) Stderr() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Stderr")
 }
 
+func (_m *MockDockerCli) EmptyOutput() bool {
+	ret := _m.ctrl.Call(_m, "EmptyOutput")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) EmptyOutput() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "EmptyOutput")
+}
+
 func (_m *MockDockerCli) DecodeInspect(_param0 ...string) (Inspected, error) {
 	_s := []interface{}{}
 	for _, _x := range _param0 {

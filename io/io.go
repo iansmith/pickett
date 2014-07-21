@@ -48,6 +48,7 @@ type DockerCli interface {
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
+	EmptyOutput() bool
 	DecodeInspect(...string) (Inspected, error)
 }
 
@@ -277,6 +278,10 @@ func (d *dockerCli) CmdBuild(s ...string) error {
 
 func (d *dockerCli) Stdout() string {
 	return d.out.String()
+}
+
+func (d *dockerCli) EmptyOutput() bool {
+	return d.out.String() == ""
 }
 
 func (d *dockerCli) LastLineOfStdout() string {

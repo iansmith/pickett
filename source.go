@@ -85,13 +85,13 @@ func (d *DockerSourceNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.
 	}
 
 	if d.dirTime.After(d.imgTime) {
-		fmt.Printf("[pickett] %s needs to be rebuilt (source directory %s is newer)\n", d.name, d.dir)
+		fmt.Printf("[pickett] '%s' needs to be rebuilt (source directory %s is newer)\n", d.name, d.dir)
 		return true, nil
 	}
 
 	for _, in := range d.in {
 		if d.imgTime.Before(in.Time()) {
-			fmt.Printf("[pickett] %s needs to be rebuilt (%s is newer)\n",
+			fmt.Printf("[pickett] '%s' needs to be rebuilt ('%s' is newer)\n",
 				d.name, in.Name())
 			return true, nil
 		}
@@ -139,7 +139,7 @@ func (d *DockerSourceNode) Build(config *Config, helper io.IOHelper, cli io.Dock
 		return err
 	}
 	if !b {
-		fmt.Printf("[pickett] %s is up to date.\n", d.name)
+		fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.name)
 		return nil
 	}
 

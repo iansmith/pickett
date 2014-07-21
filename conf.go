@@ -40,7 +40,7 @@ type ArtifactBuild struct {
 	RunIn     string
 	MergeWith string
 	Tag       string
-	Artifacts []string
+	Artifacts map[string]interface{}
 }
 
 type Config struct {

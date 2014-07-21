@@ -21,6 +21,8 @@ type GoBuildNode struct {
 	tagTime time.Time
 }
 
+type buildCommand []string
+
 // IsOutOfDate returns true if the tag that we are trying to produce is
 // before the tag of the image we depend on.
 func (b *GoBuildNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error) {
@@ -36,10 +38,43 @@ func (b *GoBuildNode) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.Docke
 		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", b.tag, b.runIn.Name())
 		return true, nil
 	}
-	fmt.Printf("[pickett] Faking out of date for %s to force go build/test\n", b.tag)
-	return true, nil
+
+	sequence := b.formBuild(conf, true, helper)
+	for _, seq := range sequence {
+		unpacked := []string(seq)
+		if err := cli.CmdRun(unpacked...); err != nil {
+			return true, err
+		}
+		if !cli.EmptyOutput() {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
+func (b *GoBuildNode) formBuild(conf *Config, dontExecute bool, helper io.IOHelper) []buildCommand {
+	result := []buildCommand{}
+
+	baseArgs := []string{}
+	if conf.CodeVolume.Directory != "" {
+		dir := helper.DirectoryRelative(conf.CodeVolume.Directory)
+		baseArgs = append(baseArgs, "-v", dir+":"+conf.CodeVolume.MountedAt)
+	}
+	baseCmd := "install"
+	if b.test {
+		baseCmd = "test"
+	}
+	if dontExecute {
+		baseCmd = baseCmd + " -n"
+	}
+
+	for _, p := range b.pkgs {
+		cmd := fmt.Sprintf("%s go %s %s", b.runIn.Name(), baseCmd, p)
+		cmdArgs := append(baseArgs, strings.Split(cmd, " ")...)
+		result = append(result, buildCommand(cmdArgs))
+	}
+	return result
+}
 func (b *GoBuildNode) build(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
 
 	args := []string{}
@@ -87,7 +122,7 @@ func (b *GoBuildNode) Build(conf *Config, helper io.IOHelper, cli io.DockerCli) 
 		return err
 	}
 	if !ood {
-		fmt.Printf("[pickett] %s is up to date.\n", b.tag)
+		fmt.Printf("[pickett] source code in '%s' is up to date\n", b.tag)
 		return nil
 	}
 	if err := b.build(conf, helper, cli); err != nil {
