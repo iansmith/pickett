@@ -30,20 +30,15 @@ func trueMain(targets []string, helper io.IOHelper, cli io.DockerCli) {
 
 func main() {
 	var debug bool
+	var configFile string
+
 	flag.BoolVar(&debug, "debug", false, "turns off verbose logging for pickett developers")
+	flag.StringVar(&configFile, "config", "Pickett.json", "use a custom pickett configuration file")
 	flag.Parse()
-	configFile := "Pickett.json"
+
 	wd, err := os.Getwd()
 	if err != nil {
 		panic("cant get working directory!")
-	}
-	if flag.NArg() > 0 {
-		configFile = flag.Arg(0)
-	}
-	rest := []string{}
-
-	if flag.NArg() > 1 {
-		rest = flag.Args()[1:]
 	}
 
 	helper, err := io.NewIOHelper(filepath.Join(wd, configFile), debug)
@@ -54,6 +49,6 @@ func main() {
 	}
 	cli, err := io.NewDocker(debug)
 	helper.CheckFatal(err, "failed to connect to docker server, maybe its not running? %v")
-	trueMain(rest, helper, cli)
+	trueMain(flag.Args(), helper, cli)
 	os.Exit(0)
 }

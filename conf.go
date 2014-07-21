@@ -23,20 +23,33 @@ type CodeVolume struct {
 	MountedAt string
 }
 
-type Build struct {
-	//DependsOn        []string
+type GoBuild struct {
 	RunIn                    string
 	Tag                      string
 	InstallGoPackages        []string
 	InstallAndTestGoPackages []string
-	GenericRun               string
+}
+
+type GenericBuild struct {
+	RunIn string
+	Tag   string
+	Run   []string
+}
+
+type ArtifactBuild struct {
+	RunIn     string
+	MergeWith string
+	Tag       string
+	Artifacts []string
 }
 
 type Config struct {
 	DockerBuildOptions []string
 	CodeVolume         CodeVolume
 	Sources            []*Source
-	Builds             []*Build
+	GoBuilds           []*GoBuild
+	ArtifactBuilds     []*ArtifactBuild
+	GenericBuilds      []*GenericBuild
 	nameToNode         map[string]Node
 }
 
@@ -69,7 +82,10 @@ func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 	if err := conf.dockerSourceNodes(helper); err != nil {
 		return nil, err
 	}
-	if _, err := conf.dockerBuildNodes(); err != nil {
+	if _, err := conf.goBuildNodes(); err != nil {
+		return nil, err
+	}
+	if _, err := conf.artifactBuildNodes(); err != nil {
 		return nil, err
 	}
 	return conf, nil
@@ -114,22 +130,53 @@ func (c *Config) Sinks() []string {
 	return result
 }
 
-// dockerBuildNodes returns all the build nodes in the pickett file.  Note that
+// goBuildNodes returns all the go build nodes in the pickett file.  Note that
 // this should not be called until after the dockerSourceNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) dockerBuildNodes() ([]*DockerBuildNode, error) {
-	var result []*DockerBuildNode
-	for _, build := range c.Builds {
-		node, err := c.newDockerBuildNode(build)
+func (c *Config) goBuildNodes() ([]*GoBuildNode, error) {
+	var result []*GoBuildNode
+	for _, build := range c.GoBuilds {
+		node, err := c.newGoBuildNode(build)
 		if err != nil {
 			return nil, err
 		}
 		n, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, err
+			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+				build.RunIn, build.Tag))
 		}
 		node.runIn = n
 		n.AddOut(node)
+		result = append(result, node)
+		c.nameToNode[build.Tag] = node
+	}
+	return result, nil
+}
+
+// artifactBuildNodes returns all theartifact build nodes in the pickett file.  Note that
+// this should not be called until after the dockerSourceNodes() have been
+// extracted as it needs data structures built at that stage.
+func (c *Config) artifactBuildNodes() ([]*ArtifactBuildNode, error) {
+	var result []*ArtifactBuildNode
+	for _, build := range c.ArtifactBuilds {
+		node, err := c.newArtifactBuildNode(build)
+		if err != nil {
+			return nil, err
+		}
+		n, found := c.nameToNode[build.RunIn]
+		if !found {
+			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+				build.RunIn, build.Tag))
+		}
+		m, found := c.nameToNode[build.MergeWith]
+		if !found {
+			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+				build.MergeWith, build.Tag))
+		}
+		node.runIn = n
+		n.AddOut(node)
+		node.mergeWith = m
+		m.AddOut(node)
 		result = append(result, node)
 		c.nameToNode[build.Tag] = node
 	}
@@ -155,18 +202,15 @@ func (c *Config) newDockerSourceNode(src *Source, helper pickett_io.IOHelper) (*
 	return node, nil
 }
 
-// newDockerBuildNode returns a DockerBuildNode from the configuration information
+// newGoBuildNode returns a GoBuildNode from the configuration information
 // provided in the pickett file. This sanity checks the config file, so it can
 // fail.
-func (c *Config) newDockerBuildNode(build *Build) (*DockerBuildNode, error) {
-	result := &DockerBuildNode{
+func (c *Config) newGoBuildNode(build *GoBuild) (*GoBuildNode, error) {
+	result := &GoBuildNode{
 		tag: build.Tag,
 	}
 	if len(build.InstallGoPackages) != 0 && len(build.InstallAndTestGoPackages) != 0 {
 		return nil, errors.New(fmt.Sprintf("%s must define only one of InstallGoPackages and InstallAndTestGoPackages", build.Tag))
-	}
-	if len(build.InstallGoPackages) == 0 && len(build.InstallAndTestGoPackages) == 0 && build.GenericRun == "" {
-		return nil, errors.New(fmt.Sprintf("%s must define one of InstallGoPackages,InstallAndTestGoPackages, and Generic Run", build.Tag))
 	}
 	if len(build.InstallGoPackages) != 0 {
 		result.pkgs = build.InstallGoPackages
@@ -176,8 +220,18 @@ func (c *Config) newDockerBuildNode(build *Build) (*DockerBuildNode, error) {
 		result.test = true
 		result.pkgs = build.InstallAndTestGoPackages
 	}
-	if build.GenericRun != "" {
-		result.generic = build.GenericRun
+	return result, nil
+}
+
+// newArtifactBuildNode returns an ArtifactBuildNode from the configuration information
+// provided in the pickett file. This sanity checks the config file, so it can
+// fail.
+func (c *Config) newArtifactBuildNode(build *ArtifactBuild) (*ArtifactBuildNode, error) {
+	result := &ArtifactBuildNode{
+		tag: build.Tag,
+	}
+	if len(build.Artifacts) == 0 {
+		return nil, errors.New(fmt.Sprintf("%s must define at leasnt one artifact", build.Tag))
 	}
 	return result, nil
 }

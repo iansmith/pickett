@@ -22,18 +22,20 @@ func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHel
 	hourAgo := now.Add(-1 * time.Hour)
 	helper.EXPECT().LastTimeInDirRelative("mydir").Return(hourAgo, nil)
 	insp := io.NewMockInspected(controller)
-	insp.EXPECT().Created().Return(now)
+	insp.EXPECT().CreatedTime().Return(now)
 	cli.EXPECT().DecodeInspect("blah/bletch").Return(insp, nil)
 
 	fakeInspectError := &docker_utils.StatusError{
 		StatusCode: 1,
 	}
+
+	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src")
 	cli.EXPECT().DecodeInspect(tag).Return(nil, fakeInspectError)
 
 	return c
 }
 
-func TestGoPackagesFailPart2(t *testing.T) {
+func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 

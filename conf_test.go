@@ -15,7 +15,7 @@ var example1 = `
 	"DockerBuildOptions" : ["-foo", "-bar"],
 	// a comment
 	"CodeVolume" : {
-		"Directory" : "/home/gredo/src",
+		"Directory" : "src", //will expand to /home/gredo/src
 		"MountedAt" : "/han",  // stray comma?,
 		"SomeExtra" : "cruft"
 	},
@@ -25,7 +25,7 @@ var example1 = `
 			"Directory" : "mydir"
 		}
 	],
-	"Builds" : [
+	"GoBuilds" : [
 		{
 			"RunIn" : "blah/bletch",
 			"InstallAndTestGoPackages": ["p1...", "p2/p3" ],
@@ -64,7 +64,7 @@ func TestConf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}
-	if c.CodeVolume.Directory != "/home/gredo/src" {
+	if c.CodeVolume.Directory != "src" {
 		t.Errorf("failed to parse CodeVolume>Directory")
 	}
 	if len(c.DockerBuildOptions) != 2 {

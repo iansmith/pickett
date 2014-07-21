@@ -292,12 +292,12 @@ func (_m *MockInspected) EXPECT() *_MockInspectedRecorder {
 	return _m.recorder
 }
 
-func (_m *MockInspected) Created() time.Time {
-	ret := _m.ctrl.Call(_m, "Created")
+func (_m *MockInspected) CreatedTime() time.Time {
+	ret := _m.ctrl.Call(_m, "CreatedTime")
 	ret0, _ := ret[0].(time.Time)
 	return ret0
 }
 
-func (_mr *_MockInspectedRecorder) Created() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Created")
+func (_mr *_MockInspectedRecorder) CreatedTime() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CreatedTime")
 }

@@ -48,10 +48,10 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 
 	//two fake Inspecteds of the tag "blah/bletch"
 	hourStamp := io.NewMockInspected(controller)
-	hourStamp.EXPECT().Created().Return(hourAgo)
+	hourStamp.EXPECT().CreatedTime().Return(hourAgo)
 
 	nowStamp := io.NewMockInspected(controller)
-	nowStamp.EXPECT().Created().Return(now)
+	nowStamp.EXPECT().CreatedTime().Return(now)
 
 	//hook inspecteds to calls to Inspect in ORDER
 	first := cli.EXPECT().DecodeInspect(BLETCH).Return(hourStamp, nil)
