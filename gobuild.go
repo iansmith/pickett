@@ -39,7 +39,7 @@ func (b *goWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time
 	sequence := b.formBuildCommand(conf, true, helper)
 	for i, seq := range sequence {
 		unpacked := []string(seq)
-		if err := cli.CmdRun(unpacked...); err != nil {
+		if err := cli.CmdRun(false, unpacked...); err != nil {
 			return time.Time{}, true, err
 		}
 		if !cli.EmptyOutput() {
@@ -88,7 +88,7 @@ func (b *goWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCli) (ti
 	sequence := b.formBuildCommand(conf, false, helper)
 	for _, seq := range sequence {
 		unpacked := []string(seq)
-		err := cli.CmdRun(unpacked...)
+		err := cli.CmdRun(false, unpacked...)
 		if err != nil {
 			cli.DumpErrOutput()
 			return time.Time{}, err

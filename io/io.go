@@ -24,6 +24,7 @@ var (
 //returned by docker server inspect function.
 type interestingPartsOfInspect struct {
 	Created time.Time
+	Name    string
 }
 
 // IOHelper abstracts IO to make things easier to test.
@@ -39,7 +40,7 @@ type IOHelper interface {
 }
 
 type DockerCli interface {
-	CmdRun(...string) error
+	CmdRun(bool, ...string) error
 	CmdPs(...string) error
 	CmdTag(...string) error
 	CmdCommit(...string) error
@@ -47,16 +48,19 @@ type DockerCli interface {
 	CmdBuild(...string) error
 	CmdCp(...string) error
 	CmdWait(...string) error
+	CmdAttach(...string) error
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
 	EmptyOutput() bool
 	DecodeInspect(...string) (Inspected, error)
 	DumpErrOutput()
+	CloneTeed() DockerCli
 }
 
 type Inspected interface {
 	CreatedTime() time.Time
+	ContainerName() string
 }
 
 var (
@@ -180,10 +184,9 @@ func validateDockerHost() error {
 }
 
 type dockerCli struct {
-	out   *bytes.Buffer
-	err   *bytes.Buffer
-	cli   *docker.DockerCli
-	debug bool
+	out, err *bytes.Buffer
+	cli      *docker.DockerCli
+	debug    bool
 }
 
 // newDockerCli builds a new docker interface and returns it. It
@@ -197,14 +200,23 @@ func newDockerCli(debug bool) DockerCli {
 	}
 
 	//tee := io.MultiWriter(result.out, os.Stdout)
-	parts := strings.Split(os.Getenv("DOCKER_HOST"), "://")
+	parts := splitProto()
 	result.cli = docker.NewDockerCli(nil, result.out, result.err,
 		parts[0], parts[1], nil)
 	if debug {
 		fmt.Printf("[docker cmd] export DOCKER_HOST='%s'\n", os.Getenv("DOCKER_HOST"))
 	}
 	return result
+}
 
+//returns two strings
+func splitProto() []string {
+	if strings.Index(os.Getenv("DOCKER_HOST"), "://") == -1 {
+		return []string{
+			"http", os.Getenv("DOCKER_HOST"),
+		}
+	}
+	return strings.Split(os.Getenv("DOCKER_HOST"), "://")
 }
 
 func (d *dockerCli) reset() {
@@ -212,7 +224,27 @@ func (d *dockerCli) reset() {
 	d.err.Reset()
 }
 
-func (d *dockerCli) CmdRun(s ...string) error {
+func (d *dockerCli) CloneTeed() DockerCli {
+	out := io.MultiWriter(os.Stdout, d.err)
+	err := io.MultiWriter(os.Stderr, d.err)
+	parts := splitProto()
+	cli := docker.NewDockerCli(nil, out, err, parts[0], parts[1], nil)
+	return &dockerCli{
+		out:   d.out,
+		err:   d.err,
+		cli:   cli,
+		debug: d.debug,
+	}
+}
+
+func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
+	if teeOutput {
+		if d.debug {
+			fmt.Printf("[debug] teeing output, so creating new docker CLI instance for stdout, stderr\n")
+		}
+		clone := d.CloneTeed()
+		return clone.CmdRun(false, s...)
+	}
 	return d.caller(d.cli.CmdRun, "run", s...)
 }
 
@@ -226,6 +258,10 @@ func (d *dockerCli) CmdWait(s ...string) error {
 
 func (d *dockerCli) CmdTag(s ...string) error {
 	return d.caller(d.cli.CmdTag, "tag", s...)
+}
+
+func (d *dockerCli) CmdAttach(s ...string) error {
+	return d.caller(d.cli.CmdAttach, "attach", s...)
 }
 
 func (d *dockerCli) CmdCommit(s ...string) error {
@@ -250,10 +286,14 @@ func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string)
 		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
 	} else if d.debug {
 		if d.out.String() != "" {
-			//fmt.Printf("string found '%s'\n", d.out.String())
-			fmt.Printf("[docker result (%d lines)] %s\n",
-				len(strings.Split(d.out.String(), "\n"))-1,
-				d.LastLineOfStdout())
+			lines := strings.Split(d.out.String(), "\n")
+			lines = lines[0 : len(lines)-1] //remove last \n
+			if len(lines) == 1 {
+				fmt.Printf("[docker result] %s\n", lines[0])
+			} else {
+				fmt.Printf("[docker result (%d lines)] %s\n",
+					len(lines), d.LastLineOfStdout())
+			}
 		}
 	}
 	return err
@@ -319,4 +359,8 @@ func (d *dockerCli) Stderr() string {
 
 func (i *interestingPartsOfInspect) CreatedTime() time.Time {
 	return time.Time(i.Created)
+}
+
+func (i *interestingPartsOfInspect) ContainerName() string {
+	return i.Name
 }

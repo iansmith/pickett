@@ -142,9 +142,9 @@ func (_m *MockDockerCli) EXPECT() *_MockDockerCliRecorder {
 	return _m.recorder
 }
 
-func (_m *MockDockerCli) CmdRun(_param0 ...string) error {
-	_s := []interface{}{}
-	for _, _x := range _param0 {
+func (_m *MockDockerCli) CmdRun(_param0 bool, _param1 ...string) error {
+	_s := []interface{}{_param0}
+	for _, _x := range _param1 {
 		_s = append(_s, _x)
 	}
 	ret := _m.ctrl.Call(_m, "CmdRun", _s...)
@@ -152,8 +152,9 @@ func (_m *MockDockerCli) CmdRun(_param0 ...string) error {
 	return ret0
 }
 
-func (_mr *_MockDockerCliRecorder) CmdRun(arg0 ...interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRun", arg0...)
+func (_mr *_MockDockerCliRecorder) CmdRun(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+	_s := append([]interface{}{arg0}, arg1...)
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRun", _s...)
 }
 
 func (_m *MockDockerCli) CmdPs(_param0 ...string) error {
@@ -254,6 +255,20 @@ func (_mr *_MockDockerCliRecorder) CmdWait(arg0 ...interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdWait", arg0...)
 }
 
+func (_m *MockDockerCli) CmdAttach(_param0 ...string) error {
+	_s := []interface{}{}
+	for _, _x := range _param0 {
+		_s = append(_s, _x)
+	}
+	ret := _m.ctrl.Call(_m, "CmdAttach", _s...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdAttach(arg0 ...interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdAttach", arg0...)
+}
+
 func (_m *MockDockerCli) Stdout() string {
 	ret := _m.ctrl.Call(_m, "Stdout")
 	ret0, _ := ret[0].(string)
@@ -317,6 +332,16 @@ func (_mr *_MockDockerCliRecorder) DumpErrOutput() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DumpErrOutput")
 }
 
+func (_m *MockDockerCli) CloneTeed() DockerCli {
+	ret := _m.ctrl.Call(_m, "CloneTeed")
+	ret0, _ := ret[0].(DockerCli)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CloneTeed() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CloneTeed")
+}
+
 // Mock of Inspected interface
 type MockInspected struct {
 	ctrl     *gomock.Controller
@@ -346,4 +371,14 @@ func (_m *MockInspected) CreatedTime() time.Time {
 
 func (_mr *_MockInspectedRecorder) CreatedTime() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CreatedTime")
+}
+
+func (_m *MockInspected) ContainerName() string {
+	ret := _m.ctrl.Call(_m, "ContainerName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+func (_mr *_MockInspectedRecorder) ContainerName() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerName")
 }

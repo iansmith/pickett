@@ -48,10 +48,10 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	cli.EXPECT().DecodeInspect("chattanooga").Return(nil, fakeInspectError)
 
 	// mock out the docker api calls to build the software
-	first := cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
+	first := cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
 		"p4...")
 	fakeErr := errors.New("whoa doggie")
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
 		"p5/p6").Return(fakeErr).After(first)
 
 	//the code will dump the error output on a build error
@@ -88,9 +88,9 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 
 	// test we are already sure we need to build, so we don't test to see if OOD
 	// via go, just run the build
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"p1...")
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"p2/p3")
 
 	//after we build successfully, we use "ps -q -l" to check to see the id of
@@ -134,15 +134,15 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	//
 
 	// test for code build needed, then build it
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"-n", "p1...")
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"p1...")
 
 	//test for code build needed, then build it
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"-n", "p2/p3")
-	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
 		"p2/p3")
 
 	//

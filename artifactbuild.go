@@ -55,7 +55,7 @@ func (a *artifactWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCl
 			fmt.Sprintf("%s", v),
 		}
 		helper.Debug("copying artifact with cp: %s -> %s", k, v)
-		err := cli.CmdRun(runCmd...)
+		err := cli.CmdRun(false, runCmd...)
 		if err != nil {
 			return time.Time{}, err
 		}
