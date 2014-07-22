@@ -4,9 +4,9 @@
 package io
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	io "io"
 	time "time"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of IOHelper interface
@@ -240,6 +240,20 @@ func (_mr *_MockDockerCliRecorder) CmdCp(arg0 ...interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCp", arg0...)
 }
 
+func (_m *MockDockerCli) CmdWait(_param0 ...string) error {
+	_s := []interface{}{}
+	for _, _x := range _param0 {
+		_s = append(_s, _x)
+	}
+	ret := _m.ctrl.Call(_m, "CmdWait", _s...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdWait(arg0 ...interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdWait", arg0...)
+}
+
 func (_m *MockDockerCli) Stdout() string {
 	ret := _m.ctrl.Call(_m, "Stdout")
 	ret0, _ := ret[0].(string)
@@ -293,6 +307,14 @@ func (_m *MockDockerCli) DecodeInspect(_param0 ...string) (Inspected, error) {
 
 func (_mr *_MockDockerCliRecorder) DecodeInspect(arg0 ...interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecodeInspect", arg0...)
+}
+
+func (_m *MockDockerCli) DumpErrOutput() {
+	_m.ctrl.Call(_m, "DumpErrOutput")
+}
+
+func (_mr *_MockDockerCliRecorder) DumpErrOutput() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DumpErrOutput")
 }
 
 // Mock of Inspected interface

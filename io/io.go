@@ -46,11 +46,13 @@ type DockerCli interface {
 	CmdInspect(...string) error
 	CmdBuild(...string) error
 	CmdCp(...string) error
+	CmdWait(...string) error
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
 	EmptyOutput() bool
 	DecodeInspect(...string) (Inspected, error)
+	DumpErrOutput()
 }
 
 type Inspected interface {
@@ -218,6 +220,10 @@ func (d *dockerCli) CmdPs(s ...string) error {
 	return d.caller(d.cli.CmdPs, "ps", s...)
 }
 
+func (d *dockerCli) CmdWait(s ...string) error {
+	return d.caller(d.cli.CmdWait, "wait", s...)
+}
+
 func (d *dockerCli) CmdTag(s ...string) error {
 	return d.caller(d.cli.CmdTag, "tag", s...)
 }
@@ -287,6 +293,12 @@ func (d *dockerCli) Stdout() string {
 
 func (d *dockerCli) EmptyOutput() bool {
 	return d.out.String() == ""
+}
+
+func (d *dockerCli) DumpErrOutput() {
+	fmt.Printf("--------------------output----------------------\n")
+	fmt.Printf("%s\n", d.err.String())
+	fmt.Printf("------------------------------------------------\n")
 }
 
 func (d *dockerCli) LastLineOfStdout() string {

@@ -56,6 +56,8 @@ func (b *goWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time
 	return insp.CreatedTime(), false, nil
 }
 
+//formBuildCommand is a helper for forming the sequence of build-related commands to
+//either probe for code out of date or build it.
 func (b *goWorker) formBuildCommand(conf *Config, dontExecute bool, helper io.IOHelper) []buildCommand {
 	result := []buildCommand{}
 
@@ -80,14 +82,15 @@ func (b *goWorker) formBuildCommand(conf *Config, dontExecute bool, helper io.IO
 	return result
 }
 
+//build does the work of actually building go source code.
 func (b *goWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, error) {
 
-	//we need to do this to test our source code for OOD
 	sequence := b.formBuildCommand(conf, false, helper)
 	for _, seq := range sequence {
 		unpacked := []string(seq)
 		err := cli.CmdRun(unpacked...)
 		if err != nil {
+			cli.DumpErrOutput()
 			return time.Time{}, err
 		}
 	}

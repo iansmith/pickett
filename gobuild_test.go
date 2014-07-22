@@ -54,6 +54,9 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	cli.EXPECT().CmdRun("-v", "/home/gredo/src:/han", "blah/bletch", "go", "install",
 		"p5/p6").Return(fakeErr).After(first)
 
+	//the code will dump the error output on a build error
+	cli.EXPECT().DumpErrOutput()
+
 	if err := c.Initiate("chattanooga", helper, cli); err != fakeErr {
 		t.Errorf("failed to get expected error: %v", err)
 	}

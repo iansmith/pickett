@@ -43,6 +43,13 @@ type ArtifactBuild struct {
 	Artifacts map[string]interface{}
 }
 
+type Layer3Service struct {
+	Name       string
+	RunIn      string
+	EntryPoint []string
+	Consumes   []string
+}
+
 type Config struct {
 	DockerBuildOptions []string
 	CodeVolume         CodeVolume
@@ -50,6 +57,7 @@ type Config struct {
 	GoBuilds           []*GoBuild
 	ArtifactBuilds     []*ArtifactBuild
 	GenericBuilds      []*GenericBuild
+	Layer3Services     []*Layer3Service
 	nameToNode         map[string]Node
 }
 
@@ -79,25 +87,42 @@ func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 		return nil, err
 	}
 	conf.nameToNode = make(map[string]Node)
-	if err := conf.sourceNodes(helper); err != nil {
-		return nil, err
+	checks := []func(pickett_io.IOHelper) error{
+		conf.checkSourceNodes,
+		conf.checkGoBuildNodes,
+		conf.checkArtifactBuildNodes,
+		conf.checkLayer3Nodes,
 	}
-	if _, err := conf.goBuildNodes(); err != nil {
-		return nil, err
-	}
-	if _, err := conf.artifactBuildNodes(); err != nil {
-		return nil, err
+
+	for _, fn := range checks {
+		if err := fn(helper); err != nil {
+			return nil, err
+		}
 	}
 	return conf, nil
 }
 
-// sourceNodes walks all the nodes defined in the configuration file
-// and returns them in a list.  The edges between the nodes are already
-// in place when this function completes.
-func (c *Config) sourceNodes(helper pickett_io.IOHelper) error {
+//checkExistingNames is a helper to generate an error if the name is alerady
+//in use in this configuration.
+func (c *Config) checkExistingName(proposed string) error {
+	if strings.Trim(proposed, " \n") == "" {
+		return errors.New(fmt.Sprintf("can't have an empty name in configuration file"))
+	}
+	if _, ok := c.nameToNode[strings.Trim(proposed, " \n")]; ok {
+		return errors.New(fmt.Sprintf("name %s already in use in this configuration"))
+	}
+	return nil
+}
+
+// checkSourceNodes walks all the "source" nodes defined in the configuration file.
+// The edges between the nodes are already in place when this function completes.
+func (c *Config) checkSourceNodes(helper pickett_io.IOHelper) error {
 	for _, img := range c.Sources {
 		w, err := c.newSourceWorker(img, helper)
 		if err != nil {
+			return err
+		}
+		if err := c.checkExistingName(img.Tag); err != nil {
 			return err
 		}
 		node := newNodeImpl(img.Tag, w)
@@ -132,19 +157,21 @@ func (c *Config) Sinks() []string {
 	return result
 }
 
-// goBuildNodes returns all the go build nodes in the pickett file.  Note that
-// this should not be called until after the dockerSourceNodes() have been
+// checkGoBuildNodes verifies all the "go build" nodes in this pickett file.  Note that
+// this should not be called until after the checkSourceNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) goBuildNodes() ([]Node, error) {
-	var result []Node
+func (c *Config) checkGoBuildNodes(pickett_io.IOHelper) error {
 	for _, build := range c.GoBuilds {
 		w, err := c.newGoWorker(build)
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if err := c.checkExistingName(build.Tag); err != nil {
+			return err
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
+			return errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
 				build.RunIn, build.Tag))
 		}
 
@@ -153,36 +180,36 @@ func (c *Config) goBuildNodes() ([]Node, error) {
 		node := newNodeImpl(build.Tag, w)
 		r.AddOut(node)
 
-		//compute result
-		result = append(result, node)
 		c.nameToNode[build.Tag] = node
 	}
-	return result, nil
+	return nil
 }
 
-// artifactBuildNodes returns all theartifact build nodes in the pickett file.  Note that
-// this should not be called until after the dockerSourceNodes() and goBuildNodes() have been
-// extracted as it needs data structures built at that stage.
-func (c *Config) artifactBuildNodes() ([]Node, error) {
-	var result []Node
+// checkArtifactBuildNodes verifies all the "artifact build" nodes in the pickett file.  Note that
+// this should not be called until after the checkSourceNodes() and checkGoBuildNodes() have been
+// extracted their parts, as it needs data structures built in these functions (notably dependencies).
+func (c *Config) checkArtifactBuildNodes(pickett_io.IOHelper) error {
 	for _, build := range c.ArtifactBuilds {
 		w, err := c.newArtifactWorker(build)
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if err := c.checkExistingName(build.Tag); err != nil {
+			return err
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build RunIn '%s'",
+			return errors.New(fmt.Sprintf("Unable to find '%s' trying to build RunIn '%s'",
 				build.RunIn, build.Tag))
 		}
 		m, found := c.nameToNode[build.MergeWith]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build MergeWith of  '%s'",
+			return errors.New(fmt.Sprintf("Unable to find '%s' trying to build MergeWith of  '%s'",
 				build.MergeWith, build.Tag))
 		}
 		// handle dependency edges
 		if _, ok := r.Worker().(*goWorker); !ok {
-			return nil, errors.New(fmt.Sprintf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
+			return errors.New(fmt.Sprintf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
 				build.Tag, r.Name()))
 		}
 		w.runIn = r
@@ -190,10 +217,63 @@ func (c *Config) artifactBuildNodes() ([]Node, error) {
 		node := newNodeImpl(build.Tag, w)
 		r.AddOut(node)
 		m.AddOut(node)
-		// now build the node and put it in the map + result
-		result = append(result, node)
+
 		c.nameToNode[build.Tag] = node
 	}
+	return nil
+}
+
+//checkLayer3Nodes verifies all the layer3 setups in this configuration file.
+func (c *Config) checkLayer3Nodes(pickett_io.IOHelper) error {
+	//first pass is to establish all the names and do things that don't involve
+	//complex deps
+	for _, l3 := range c.Layer3Services {
+		if err := c.checkExistingName(l3.Name); err != nil {
+			return err
+		}
+		w, err := c.newLayer3Worker(l3)
+		if err != nil {
+			return err
+		}
+		runIn, ok := c.nameToNode[strings.Trim(l3.RunIn, " \n")]
+		if !ok {
+			return errors.New(fmt.Sprintf("unable to find image '%s' to run %s in!", l3.RunIn, l3.Name))
+		}
+		w.runIn = runIn
+		node := newNodeImpl(l3.Name, w)
+		c.nameToNode[strings.Trim(l3.Name, " \n")] = node
+	}
+	//second pass is to introduce edges
+	for _, l3 := range c.Layer3Services {
+		sink := c.nameToNode[strings.Trim(l3.Name, " \n")]
+		wr := sink.Worker().(*layer3WorkerRunner)
+
+		for _, in := range l3.Consumes {
+			other, ok := c.nameToNode[in]
+			if !ok {
+				return errors.New(fmt.Sprintf("can't find other layer3 service named %s for %s", in, l3.Name))
+			}
+			_, ok = other.Worker().(runner)
+			if !ok {
+				return errors.New(fmt.Sprintf("can't consume %s in %s, it's not a layer 3 service", in, l3.Name))
+			}
+			other.AddOut(sink)
+			wr.consumes = append(wr.consumes, other)
+		}
+	}
+	return nil
+}
+
+//newLayer3Worker creates a new layer3 node from the data supplied. It can fail if
+//the config file is bogus; this ignores the issue of dependencies.
+func (c *Config) newLayer3Worker(l3 *Layer3Service) (*layer3WorkerRunner, error) {
+	result := &layer3WorkerRunner{
+		name: l3.Name,
+	}
+	if len(l3.EntryPoint) == 0 {
+		return nil, errors.New(fmt.Sprintf("cannot have an empty entry point (in %s)", l3.Name))
+	}
+	result.entryPoint = l3.EntryPoint
 	return result, nil
 }
 
@@ -262,9 +342,24 @@ func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error
 // Initiate does the work of running from creation to a particular tag being "born".
 // Called by the "main()" of the pickett program if you provide a "target".
 func (c *Config) Initiate(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
-	node, isPresent := c.nameToNode[name]
+	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
 	if !isPresent {
-		return errors.New(fmt.Sprintf("no such target: %s", name))
+		return errors.New(fmt.Sprintf("no such target for build or run: %s", name))
 	}
-	return node.Build(c, helper, cli)
+	err := node.Build(c, helper, cli)
+	if err != nil {
+		return err
+	}
+	//might be a node that can be run
+	r, ok := node.Worker().(runner)
+	if ok {
+		id, err := r.run(helper, cli)
+		if err != nil {
+			return err
+		}
+		if err := cli.CmdWait(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }

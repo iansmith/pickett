@@ -106,6 +106,7 @@ func (d *sourceWorker) build(config *Config, helper io.IOHelper, cli io.DockerCl
 	buildOpts := append(config.DockerBuildOptions, helper.DirectoryRelative(d.dir))
 	err := cli.CmdBuild(buildOpts...)
 	if err != nil {
+		cli.DumpErrOutput()
 		return time.Time{}, err
 	}
 

@@ -49,7 +49,7 @@ func (a *artifactWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCl
 		runCmd := []string{
 			"-v",
 			fmt.Sprintf("%s:%s", dir, conf.CodeVolume.MountedAt),
-			fmt.Sprintf("%s", a.mergeWith.Name()),
+			fmt.Sprintf("%s", curr),
 			"cp",
 			fmt.Sprintf("%s", k),
 			fmt.Sprintf("%s", v),
