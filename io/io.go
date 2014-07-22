@@ -195,7 +195,7 @@ func newDockerCli(debug bool) DockerCli {
 	}
 
 	//tee := io.MultiWriter(result.out, os.Stdout)
-	parts := strings.Split(os.Getenv("DOCKER_HOST"), ":")
+	parts := strings.Split(os.Getenv("DOCKER_HOST"), "://")
 	result.cli = docker.NewDockerCli(nil, result.out, result.err,
 		parts[0], parts[1], nil)
 	if debug {
