@@ -10,8 +10,9 @@ export GOPATH=/tmp/foo
 export PATH=$PATH:/tmp/foo/bin
 go get github.com/tools/godep
 godep get github.com/igneous-systems/pickett/pickett
+go install github.com/igneous-systems/pickett/pickett
 ```
-The last one may take a while to pull down all the dependencies.
+The next to last one may take a while to pull down all the dependencies.
 
 You should end up with the executable `pickett` in `/tmp/foo/bin`.
 
