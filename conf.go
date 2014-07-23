@@ -353,7 +353,9 @@ func (c *Config) Initiate(name string, helper pickett_io.IOHelper, cli pickett_i
 	//might be a node that can be run
 	r, ok := node.Worker().(runner)
 	if ok {
-		_, err := r.run(true, helper, cli)
+		//XXXX MOVE ME
+		etcd := pickett_io.NewEtcdClient()
+		err = r.run(helper, cli, etcd)
 		if err != nil {
 			return err
 		}

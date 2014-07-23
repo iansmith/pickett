@@ -1,10 +1,15 @@
 {
 	"ImportPath": "github.com/igneous-systems/pickett/pickett",
-	"GoVersion": "go1.2.1",
+	"GoVersion": "go1.3",
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gomock/gomock",
 			"Rev": "5d0b59c9f277f888d2c70b00908236a30ab90f45"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-114-g7745cfd",
+			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},
 		{
 			"ImportPath": "github.com/docker/libcontainer/cgroups",
