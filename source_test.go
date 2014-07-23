@@ -23,7 +23,9 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	defer controller.Finish()
 
 	cli := io.NewMockDockerCli(controller)
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
+	etcd := io.NewMockEtcdClient(controller)
+	var vbox io.VirtualBox
 
 	//ignore debug messages
 	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
@@ -69,7 +71,7 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	if !node.Time().IsZero() {
 		t.Fatalf("failed to initialize times correctly: %v\n", node.Time())
 	}
-	c.Initiate("blah/bletch", helper, cli)
+	c.Initiate("blah/bletch", helper, cli, etcd, vbox)
 
 	//
 	// we have rebuilt, check the time on the node

@@ -15,12 +15,13 @@ type etcdClient struct {
 	debug  bool
 }
 
-func NewEtcdClient(debug bool) EtcdClient {
+func NewEtcdClient(debug bool) (EtcdClient, error) {
 	result := &etcdClient{
 		client: etcd.NewClient([]string{constructEctdHost()}),
 		debug:  debug,
 	}
-	return result
+	fmt.Printf("Xxx SHOUld TEST CONNECTION\n")
+	return result, nil
 }
 
 func (e *etcdClient) Get(path string) (string, bool, error) {

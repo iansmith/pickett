@@ -43,7 +43,7 @@ func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
 }
 
 //setTimestampOnImage sets the timestamp that docker has registered for this image.
-func (d *sourceWorker) setTimestampOnImage(helper io.IOHelper, cli io.DockerCli) error {
+func (d *sourceWorker) setTimestampOnImage(helper io.Helper, cli io.DockerCli) error {
 	t, err := tagToTime(d.tag, cli)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (d *sourceWorker) setTimestampOnImage(helper io.IOHelper, cli io.DockerCli)
 
 //setLastTimeOnDirectoryEntry looks at the directory in this worker and returns the latest
 //modification time found on a file in that directory.
-func (d *sourceWorker) setLastTimeOnDirectoryEntry(helper io.IOHelper) error {
+func (d *sourceWorker) setLastTimeOnDirectoryEntry(helper io.Helper) error {
 	last, err := helper.LastTimeInDirRelative(d.dir)
 	if err != nil {
 		return err
@@ -73,7 +73,8 @@ func (d *sourceWorker) setLastTimeOnDirectoryEntry(helper io.IOHelper) error {
 //that holds the dockerfile.  Note that an image that is unknown is not out of date
 //with respect to an empty directory (time stamps are equal).  This returns the image
 //time if we say false or "this is not ood".
-func (d *sourceWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, bool, error) {
+func (d *sourceWorker) ood(conf *Config, helper io.Helper, cli io.DockerCli,
+	etcd io.EtcdClient, vbox io.VirtualBox) (time.Time, bool, error) {
 	if err := d.setLastTimeOnDirectoryEntry(helper); err != nil {
 		return time.Time{}, true, err
 	}
@@ -100,7 +101,8 @@ func (d *sourceWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (
 
 //Build constructs a new image based on a directory that has a dockerfile. It
 //calls the docker server to actually perform the build.
-func (d *sourceWorker) build(config *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, error) {
+func (d *sourceWorker) build(config *Config, helper io.Helper, cli io.DockerCli,
+	etcd io.EtcdClient, vbox io.VirtualBox) (time.Time, error) {
 	helper.Debug("Building '%s'...", d.tag)
 
 	buildOpts := append(config.DockerBuildOptions, helper.DirectoryRelative(d.dir))

@@ -13,24 +13,24 @@ import (
 //for this node.  This is to insure we don't bother even considering a node OOD if it has
 //already been built or checked in the current process.
 type worker interface {
-	ood(*Config, io.IOHelper, io.DockerCli) (time.Time, bool, error)
-	build(*Config, io.IOHelper, io.DockerCli) (time.Time, error)
+	ood(*Config, io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) (time.Time, bool, error)
+	build(*Config, io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) (time.Time, error)
 	in() []Node
 }
 
 //runners are things that know how to execute themselves.  The problem with the types
 //here is some things are both runner and worker.
 type runner interface {
-	run(io.IOHelper, io.DockerCli, io.EtcdClient) error
+	run(io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) error
 }
 
 //Node is the abstraction for an element in the dependency graph.  The key operations that are
 //specific to the type of node are implemented by a specific Worker.
 type Node interface {
-	IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error)
-	Build(conf *Config, helper io.IOHelper, cli io.DockerCli) error
+	IsOutOfDate(*Config, io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) (bool, error)
+	Build(*Config, io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) error
 	IsSink() bool
-	BringInboundUpToDate(conf *Config, helper io.IOHelper, cli io.DockerCli) error
+	BringInboundUpToDate(*Config, io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) error
 	Name() string
 	Time() time.Time
 	AddOut(Node) //don't need AddIn because the creator of Node handles that.
@@ -53,14 +53,14 @@ func newNodeImpl(name string, w worker) *nodeImpl {
 }
 
 // IsOutOfDate delegates to worker OOD function, but does bookkeeping about it at the top level.
-func (n *nodeImpl) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCli) (bool, error) {
+func (n *nodeImpl) IsOutOfDate(conf *Config, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) (bool, error) {
 	//we have already done the work on this build?
 	if !n.tagTime.IsZero() {
 		helper.Debug("avoiding second check on %s (already found %v)", n.Name(), n.tagTime)
 		return false, nil
 	}
 	//no, need to do the work
-	t, ood, err := n.work.ood(conf, helper, cli)
+	t, ood, err := n.work.ood(conf, helper, cli, etcd, vbox)
 	if err != nil {
 		return false, err
 	}
@@ -71,13 +71,13 @@ func (n *nodeImpl) IsOutOfDate(conf *Config, helper io.IOHelper, cli io.DockerCl
 }
 
 //Build delegates to the worker build function if there is any work to do.
-func (n *nodeImpl) Build(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
+func (n *nodeImpl) Build(conf *Config, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) error {
 	helper.Debug("Building '%s' ...", n.Name())
-	err := n.BringInboundUpToDate(conf, helper, cli)
+	err := n.BringInboundUpToDate(conf, helper, cli, etcd, vbox)
 	if err != nil {
 		return err
 	}
-	ood, err := n.IsOutOfDate(conf, helper, cli)
+	ood, err := n.IsOutOfDate(conf, helper, cli, etcd, vbox)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (n *nodeImpl) Build(conf *Config, helper io.IOHelper, cli io.DockerCli) err
 	}
 
 	//there is work to do
-	t, err := n.work.build(conf, helper, cli)
+	t, err := n.work.build(conf, helper, cli, etcd, vbox)
 	if err != nil {
 		return err
 	}
@@ -97,10 +97,10 @@ func (n *nodeImpl) Build(conf *Config, helper io.IOHelper, cli io.DockerCli) err
 
 //BringInboundUpToDate walks all the nodes that this node depends on
 //up to date.
-func (n *nodeImpl) BringInboundUpToDate(conf *Config, helper io.IOHelper, cli io.DockerCli) error {
+func (n *nodeImpl) BringInboundUpToDate(conf *Config, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) error {
 	inbound := n.work.in()
 	for _, in := range inbound {
-		if err := in.Build(conf, helper, cli); err != nil {
+		if err := in.Build(conf, helper, cli, etcd, vbox); err != nil {
 			return err
 		}
 	}

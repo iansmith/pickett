@@ -64,7 +64,7 @@ type Config struct {
 // NewCofingFile creates a new instance of configuration, including
 // all the parsing of the config file and validation checking on the
 // items therein.
-func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
+func NewConfig(reader io.Reader, helper pickett_io.Helper) (*Config, error) {
 	all, err := ioutil.ReadAll(reader)
 	helper.CheckFatal(err, "could not read all of configuration file: %v")
 	lines := strings.Split(string(all), "\n")
@@ -87,7 +87,7 @@ func NewConfig(reader io.Reader, helper pickett_io.IOHelper) (*Config, error) {
 		return nil, err
 	}
 	conf.nameToNode = make(map[string]Node)
-	checks := []func(pickett_io.IOHelper) error{
+	checks := []func(pickett_io.Helper) error{
 		conf.checkSourceNodes,
 		conf.checkGoBuildNodes,
 		conf.checkArtifactBuildNodes,
@@ -116,7 +116,7 @@ func (c *Config) checkExistingName(proposed string) error {
 
 // checkSourceNodes walks all the "source" nodes defined in the configuration file.
 // The edges between the nodes are already in place when this function completes.
-func (c *Config) checkSourceNodes(helper pickett_io.IOHelper) error {
+func (c *Config) checkSourceNodes(helper pickett_io.Helper) error {
 	for _, img := range c.Sources {
 		w, err := c.newSourceWorker(img, helper)
 		if err != nil {
@@ -160,7 +160,7 @@ func (c *Config) Sinks() []string {
 // checkGoBuildNodes verifies all the "go build" nodes in this pickett file.  Note that
 // this should not be called until after the checkSourceNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) checkGoBuildNodes(pickett_io.IOHelper) error {
+func (c *Config) checkGoBuildNodes(pickett_io.Helper) error {
 	for _, build := range c.GoBuilds {
 		w, err := c.newGoWorker(build)
 		if err != nil {
@@ -188,7 +188,7 @@ func (c *Config) checkGoBuildNodes(pickett_io.IOHelper) error {
 // checkArtifactBuildNodes verifies all the "artifact build" nodes in the pickett file.  Note that
 // this should not be called until after the checkSourceNodes() and checkGoBuildNodes() have been
 // extracted their parts, as it needs data structures built in these functions (notably dependencies).
-func (c *Config) checkArtifactBuildNodes(pickett_io.IOHelper) error {
+func (c *Config) checkArtifactBuildNodes(pickett_io.Helper) error {
 	for _, build := range c.ArtifactBuilds {
 		w, err := c.newArtifactWorker(build)
 		if err != nil {
@@ -224,7 +224,7 @@ func (c *Config) checkArtifactBuildNodes(pickett_io.IOHelper) error {
 }
 
 //checkLayer3Nodes verifies all the layer3 setups in this configuration file.
-func (c *Config) checkLayer3Nodes(pickett_io.IOHelper) error {
+func (c *Config) checkLayer3Nodes(pickett_io.Helper) error {
 	//first pass is to establish all the names and do things that don't involve
 	//complex deps
 	for _, l3 := range c.Layer3Services {
@@ -283,7 +283,7 @@ func (c *Config) newLayer3Worker(l3 *Layer3Service) (*layer3WorkerRunner, error)
 // Pickett.json file to construct paths such that the directory is relative
 // to the place where the Pickett.json is located.  This ignores the issue
 // of edges.
-func (c *Config) newSourceWorker(src *Source, helper pickett_io.IOHelper) (*sourceWorker, error) {
+func (c *Config) newSourceWorker(src *Source, helper pickett_io.Helper) (*sourceWorker, error) {
 	node := &sourceWorker{
 		tag: src.Tag,
 		dir: src.Directory,
@@ -339,23 +339,23 @@ func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error
 	return worker, nil
 }
 
-// Initiate does the work of running from creation to a particular tag being "born".
-// Called by the "main()" of the pickett program if you provide a "target".
-func (c *Config) Initiate(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
+// Initiate is alled by the "main()" of the pickett program to build a "target".
+// It requires that you supply the various IO objects because these are passed around
+// internally but never created.
+func (c *Config) Initiate(name string, helper pickett_io.Helper, cli pickett_io.DockerCli,
+	etcd pickett_io.EtcdClient, vbox pickett_io.VirtualBox) error {
 	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
 	if !isPresent {
 		return errors.New(fmt.Sprintf("no such target for build or run: %s", name))
 	}
-	err := node.Build(c, helper, cli)
+	err := node.Build(c, helper, cli, etcd, vbox)
 	if err != nil {
 		return err
 	}
 	//might be a node that can be run
 	r, ok := node.Worker().(runner)
 	if ok {
-		//XXXX MOVE ME
-		etcd := pickett_io.NewEtcdClient()
-		err = r.run(helper, cli, etcd)
+		err = r.run(helper, cli, etcd, vbox)
 		if err != nil {
 			return err
 		}

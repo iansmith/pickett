@@ -12,7 +12,7 @@ import (
 	"github.com/igneous-systems/pickett/io"
 )
 
-func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockIOHelper, cli *io.MockDockerCli) *Config {
+func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockHelper, cli *io.MockDockerCli) *Config {
 	setupForExample1Conf(controller, helper)
 	//ignoring error is ok because tested in TestConf
 	c, _ := NewConfig(strings.NewReader(example1), helper)
@@ -33,12 +33,15 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	defer controller.Finish()
 
 	cli := io.NewMockDockerCli(controller)
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
+	etcd := io.NewMockEtcdClient(controller)
+	vbox := io.NewMockVirtualBox(controller)
 
 	c := setupForDontBuildBletch(controller, helper, cli)
 
 	//this is called to figure out how to mount the source... we don't care how many
 	//times this happens
+	vbox.EXPECT().NeedPathTranslation().Return(false).AnyTimes()
 	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
 
 	//we want to start a build of "chattanooga"
@@ -57,7 +60,7 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	//the code will dump the error output on a build error
 	cli.EXPECT().DumpErrOutput()
 
-	if err := c.Initiate("chattanooga", helper, cli); err != fakeErr {
+	if err := c.Initiate("chattanooga", helper, cli, etcd, vbox); err != fakeErr {
 		t.Errorf("failed to get expected error: %v", err)
 	}
 }
@@ -67,12 +70,15 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	defer controller.Finish()
 
 	cli := io.NewMockDockerCli(controller)
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
+	etcd := io.NewMockEtcdClient(controller)
+	vbox := io.NewMockVirtualBox(controller)
 
 	c := setupForDontBuildBletch(controller, helper, cli)
 
 	//this is called to figure out how to mount the source... we don't care how many
 	//times this happens
+	vbox.EXPECT().NeedPathTranslation().Return(false).AnyTimes()
 	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
 
 	//we want to start a build of "nashville" when we are first asked, but the second
@@ -98,7 +104,7 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	expectContainerPSAndCommit(cli)
 
 	//hit it!
-	c.Initiate("nashville", helper, cli)
+	c.Initiate("nashville", helper, cli, etcd, vbox)
 }
 
 func expectContainerPSAndCommit(cli *io.MockDockerCli) {
@@ -113,13 +119,17 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	defer controller.Finish()
 
 	cli := io.NewMockDockerCli(controller)
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
+	etcd := io.NewMockEtcdClient(controller)
+	vbox := io.NewMockVirtualBox(controller)
 
 	c := setupForDontBuildBletch(controller, helper, cli)
 
 	//this is called to figure out how to mount the source... we don't care how many
 	//times this happens
-	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/src").AnyTimes()
+	vbox.EXPECT().NeedPathTranslation().Return(true).AnyTimes()
+	vbox.EXPECT().CodeVolumeToVboxPath("/home/gredo/project/bounty/src").Return("/vagrant/src", nil).AnyTimes()
+	helper.EXPECT().DirectoryRelative("src").Return("/home/gredo/project/bounty/src").AnyTimes()
 
 	//we want to suggest that the nashville container was built recently when first
 	//asked... we will be asked a second time, but it gets discarded so we just
@@ -134,15 +144,15 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	//
 
 	// test for code build needed, then build it
-	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/vagrant/src:/han", "blah/bletch", "go", "test",
 		"-n", "p1...")
-	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/vagrant/src:/han", "blah/bletch", "go", "test",
 		"p1...")
 
 	//test for code build needed, then build it
-	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/vagrant/src:/han", "blah/bletch", "go", "test",
 		"-n", "p2/p3")
-	cli.EXPECT().CmdRun(false, "-v", "/home/gredo/src:/han", "blah/bletch", "go", "test",
+	cli.EXPECT().CmdRun(false, "-v", "/vagrant/src:/han", "blah/bletch", "go", "test",
 		"p2/p3")
 
 	//
@@ -159,6 +169,17 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	expectContainerPSAndCommit(cli)
 
 	//hit it!
-	c.Initiate("nashville", helper, cli)
+	c.Initiate("nashville", helper, cli, etcd, vbox)
 
+}
+
+func TestVbox(T *testing.T) {
+	vbox, err := io.NewVirtualBox(true)
+	if err != nil {
+		T.Fatalf("%v", err)
+	}
+	_, err = vbox.CodeVolumeToVboxPath("/home/iansmith/foo")
+	if err != nil {
+		T.Fatalf("%v", err)
+	}
 }

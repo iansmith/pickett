@@ -40,7 +40,7 @@ var example1 = `
 }
 `
 
-func setupForExample1Conf(controller *gomock.Controller, helper *io.MockIOHelper) {
+func setupForExample1Conf(controller *gomock.Controller, helper *io.MockHelper) {
 	//ignore debug messages
 	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 	helper.EXPECT().Debug(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -54,7 +54,7 @@ func TestConf(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
 	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
 
 	//the caller is just opening this for the error return, he ignores the file

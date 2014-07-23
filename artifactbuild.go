@@ -17,7 +17,8 @@ type artifactWorker struct {
 
 // IsOutOfDate returns true if the tag that we are trying to produce is
 // before the tag of the image we depend on.
-func (a *artifactWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, bool, error) {
+func (a *artifactWorker) ood(conf *Config, helper io.Helper, cli io.DockerCli,
+	etcd io.EtcdClient, vbox io.VirtualBox) (time.Time, bool, error) {
 	t, err := tagToTime(a.tag, cli)
 	if err != nil {
 		return time.Time{}, true, err
@@ -38,7 +39,8 @@ func (a *artifactWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli)
 	return t, false, nil
 }
 
-func (a *artifactWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, error) {
+func (a *artifactWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
+	etcd io.EtcdClient, vbox io.VirtualBox) (time.Time, error) {
 	if conf.CodeVolume.MountedAt == "" {
 		return time.Time{}, errors.New("not clever enough to copy artifacts that are not on a code volume!")
 	}
