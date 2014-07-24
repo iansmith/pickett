@@ -55,12 +55,13 @@ func TestConf(t *testing.T) {
 	defer controller.Finish()
 
 	helper := io.NewMockHelper(controller)
+	cli := io.NewMockDockerCli(controller)
 	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
 
 	//the caller is just opening this for the error return, he ignores the file
 	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)
 
-	c, err := NewConfig(strings.NewReader(example1), helper)
+	c, err := NewConfig(strings.NewReader(example1), helper, cli)
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}

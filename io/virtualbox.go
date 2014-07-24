@@ -50,6 +50,21 @@ func (v *vboxManage) NeedPathTranslation() bool {
 	return true //tcp
 }
 
+func (v *vboxManage) guessHomeDir(vol string) (string, error) {
+	if os.Getenv("HOME") == "" {
+		return "", errors.New("You dont have a HOME environment variable set, can't even guess a vagrant mapping!")
+	}
+	home := os.Getenv("HOME")
+	if !strings.HasPrefix(vol, home) {
+		return "", errors.New(fmt.Sprintf("Cant guess a /vagrant mapping from %s", vol))
+	}
+	result := "/vagrant/" + vol[len(home):]
+	if v.debug {
+		fmt.Printf("[debug] no virtualbox mappings, guessing %s -> %s...\n", vol, result)
+	}
+	return result, nil
+}
+
 //CodeVolumeToVboxPath does the work to figure out for given HOST path
 //how to compute a VM path.  It assume that shared folders (in the virtualbox
 //sense) are mounted at /, which might be wrong for non-vagrant.
@@ -113,6 +128,9 @@ func (v *vboxManage) CodeVolumeToVboxPath(vol string) (string, error) {
 	for k, v := range sharedPath {
 		mapping[k] = sharedName[v]
 	}
+	if len(mapping) == 0 {
+		return v.guessHomeDir(vol)
+	}
 	if v.debug {
 		fmt.Printf("[debug] virtualbox path mappings %+v\n", mapping)
 	}
@@ -125,5 +143,5 @@ func (v *vboxManage) CodeVolumeToVboxPath(vol string) (string, error) {
 			return result, nil
 		}
 	}
-	return "", errors.New(fmt.Sprintf("could not find a source mapping for %s", vol))
+	return v.guessHomeDir(vol)
 }

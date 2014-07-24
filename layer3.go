@@ -10,6 +10,8 @@ import (
 
 type layer3WorkerRunner struct {
 	name       string
+	runImage   string
+	runInNode  bool
 	runIn      Node
 	entryPoint []string
 	consumes   []Node //XXX this should be type runner somehow
@@ -17,7 +19,11 @@ type layer3WorkerRunner struct {
 
 //in returns a single node that is our inbound edge, the container we run in.
 func (l *layer3WorkerRunner) in() []Node {
-	return append(l.consumes, l.runIn)
+	result := []Node{}
+	if l.runInNode {
+		result = append(result, l.runIn)
+	}
+	return result
 }
 
 func (l *layer3WorkerRunner) run(helper io.Helper, cli io.DockerCli, etcd io.EtcdClient,

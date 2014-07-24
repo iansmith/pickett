@@ -9,10 +9,14 @@ import (
 
 // ArtifactWorker implements the worker interface so it can be part of a node.
 type artifactWorker struct {
-	tag       string
-	runIn     Node
-	mergeWith Node
-	artifacts map[string]string
+	tag            string
+	runIn          Node
+	runImage       string
+	runsInNode     bool
+	mergeWith      Node
+	mergeWithImage string
+	mergeWithNode  bool
+	artifacts      map[string]string
 }
 
 // IsOutOfDate returns true if the tag that we are trying to produce is
@@ -84,7 +88,12 @@ func (a *artifactWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
 }
 
 func (a *artifactWorker) in() []Node {
-	return []Node{
-		a.runIn, a.mergeWith,
+	result := []Node{}
+	if a.runsInNode {
+		result = append(result, a.runIn)
 	}
+	if a.mergeWithNode {
+		result = append(result, a.mergeWith)
+	}
+	return result
 }

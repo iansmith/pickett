@@ -15,7 +15,7 @@ import (
 func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockHelper, cli *io.MockDockerCli) *Config {
 	setupForExample1Conf(controller, helper)
 	//ignoring error is ok because tested in TestConf
-	c, _ := NewConfig(strings.NewReader(example1), helper)
+	c, _ := NewConfig(strings.NewReader(example1), helper, cli)
 
 	//fake out the building of bletch
 	now := time.Now()

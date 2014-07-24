@@ -30,7 +30,7 @@ func makeIOObjects(debug bool, path string) (io.Helper, io.DockerCli, io.EtcdCli
 // and a working helper.
 func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) {
 	reader := helper.ConfigReader()
-	config, err := pickett.NewConfig(reader, helper)
+	config, err := pickett.NewConfig(reader, helper, cli)
 	helper.CheckFatal(err, "can't understand config file %s: %v", helper.ConfigFile())
 
 	// if you don't tell us what to build, we build everything with no outgoing

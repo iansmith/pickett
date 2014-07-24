@@ -25,7 +25,7 @@ type DockerCli interface {
 	CmdTag(...string) error
 	CmdCommit(...string) error
 	CmdInspect(...string) error
-	CmdBuild(...string) error
+	CmdBuild(bool, ...string) error
 	CmdCp(...string) error
 	CmdWait(...string) error
 	CmdAttach(...string) error
@@ -83,7 +83,7 @@ func (d *dockerCli) reset() {
 }
 
 func (d *dockerCli) CloneTeed() DockerCli {
-	out := io.MultiWriter(os.Stdout, d.err)
+	out := io.MultiWriter(os.Stdout, d.out)
 	err := io.MultiWriter(os.Stderr, d.err)
 	parts := splitProto()
 	cli := docker.NewDockerCli(nil, out, err, parts[0], parts[1], nil)
@@ -181,7 +181,11 @@ func (d *dockerCli) CmdInspect(s ...string) error {
 	return d.caller(d.cli.CmdInspect, "inspect", s...)
 }
 
-func (d *dockerCli) CmdBuild(s ...string) error {
+func (d *dockerCli) CmdBuild(teeOutput bool, s ...string) error {
+	if teeOutput {
+		clone := d.CloneTeed()
+		return clone.CmdBuild(false, s...)
+	}
 	return d.caller(d.cli.CmdBuild, "build", s...)
 }
 
@@ -195,6 +199,9 @@ func (d *dockerCli) EmptyOutput() bool {
 
 func (d *dockerCli) DumpErrOutput() {
 	fmt.Printf("--------------------output----------------------\n")
+	fmt.Printf("%s\n", d.out.String())
+	fmt.Printf("------------------------------------------------\n")
+	fmt.Printf("--------------------error-----------------------\n")
 	fmt.Printf("%s\n", d.err.String())
 	fmt.Printf("------------------------------------------------\n")
 }
@@ -205,7 +212,7 @@ func (d *dockerCli) LastLineOfStdout() string {
 	//there is a terminating \n on the last line, need to subtract 2 to get
 	//the last element of this slice
 	if len(lines) < 2 {
-		fmt.Printf("docker result '%s'\n", s)
+		fmt.Printf("panicing due to bad docker result '%s'\n", s)
 		panic("badly formed lines of output from docker command")
 	}
 	return lines[len(lines)-2]

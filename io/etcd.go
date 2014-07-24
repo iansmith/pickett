@@ -20,7 +20,7 @@ func NewEtcdClient(debug bool) (EtcdClient, error) {
 		client: etcd.NewClient([]string{constructEctdHost()}),
 		debug:  debug,
 	}
-	fmt.Printf("Xxx SHOUld TEST CONNECTION\n")
+	fmt.Printf("XXX--ETCD--XXXX SHOULD TEST CONNECTION\n")
 	return result, nil
 }
 
