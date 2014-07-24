@@ -21,7 +21,7 @@ type worker interface {
 //runners are things that know how to execute themselves.  The problem with the types
 //here is some things are both runner and worker.
 type runner interface {
-	run(io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) error
+	run(io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) (*policyInput, error)
 }
 
 //Node is the abstraction for an element in the dependency graph.  The key operations that are

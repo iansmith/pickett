@@ -1,8 +1,8 @@
 package pickett
 
 import (
+	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/igneous-systems/pickett/io"
@@ -27,58 +27,28 @@ func (l *layer3WorkerRunner) in() []Node {
 }
 
 func (l *layer3WorkerRunner) run(helper io.Helper, cli io.DockerCli, etcd io.EtcdClient,
-	vbox io.VirtualBox) error {
-	helper.Debug("starting run for %s", l.name)
+	vbox io.VirtualBox) (*policyInput, error) {
 
-	value, present, err := etcd.Get(filepath.Join(io.PICKETT_KEYSPACE, "containers", l.name))
-
-	/*baseArgs := []string{"-d"}
-	err := cli.CmdRun(false, l.runIn, l.entryPoint...)
-	if err != nil {
-		return err
+	links := make(map[string]string)
+	for _, node := range l.consumes {
+		r, ok := node.Worker().(*layer3WorkerRunner)
+		if !ok {
+			return nil, errors.New(
+				fmt.Sprintf("%s: can't consume anything other than l3 services: %s", l.name, node.Name()))
+		}
+		input, err := r.run(helper, cli, etcd, vbox)
+		if err != nil {
+			return nil, err
+		}
+		links[input.containerName] = input.service.name
 	}
-	dockerId := cli.LastLineOfStdout()
-	*/
-	fmt.Printf("l3 %v %v %v\n", value, present, err)
-	return nil
-}
 
-//this allows us to start up a network of layer3 components
-func (l *layer3WorkerRunner) XXXRun(teeoutput bool, helper io.Helper, cli io.DockerCli, api io.EtcdClient) (string, error) {
-	/*	helper.Debug("starting invocation for %s", l.name)
-		containerMap := make(map[string]string)
-		for _, dependency := range l.consumes {
-			r := dependency.Worker().(runner)
-			id, err := r.run(false, helper, cli)
-			if err != nil {
-				return "", err
-			}
-			insp, err := cli.DecodeInspect(id)
-			if err != nil {
-				return "", err
-			}
-			containerMap[dependency.Name()] = insp.ContainerName()
-		}
-		baseArgs := []string{}
-		if !teeoutput {
-			baseArgs = append(baseArgs, "-d") //run in background
-		}
-		links := baseArgs
-		for k, v := range containerMap {
-			links = append(links, "--link", fmt.Sprintf("%s:%s", v, k))
-		}
-		cmd := append(append(links, l.runIn.Name()), l.entryPoint...)
-
-		if !teeoutput {
-			err := cli.CmdRun(false, cmd...)
-			if err != nil {
-				return "", err
-			}
-			return cli.LastLineOfStdout(), nil
-		}
-		err := cli.CmdRun(true, cmd...)
-	*/
-	return "", nil
+	in, err := createPolicyInput(l, cli, etcd)
+	if err != nil {
+		return nil, err
+	}
+	myPolicy := ALWAYS
+	return in, myPolicy.appyPolicy(in, links, cli, etcd)
 }
 
 // ood is never true, there is no way for us to be out of date.

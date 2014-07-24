@@ -17,6 +17,12 @@ import (
 type interestingPartsOfInspect struct {
 	Created time.Time
 	Name    string
+	Status  interestingPartsOfStatus
+}
+
+type interestingPartsOfStatus struct {
+	Running  bool
+	ExitCode int
 }
 
 type DockerCli interface {
@@ -29,6 +35,7 @@ type DockerCli interface {
 	CmdCp(...string) error
 	CmdWait(...string) error
 	CmdAttach(...string) error
+	CmdStop(...string) error
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
@@ -41,6 +48,7 @@ type DockerCli interface {
 type Inspected interface {
 	CreatedTime() time.Time
 	ContainerName() string
+	Running() bool
 }
 
 //NewDocker returns a connection to the docker server.  Pickett assumes that
@@ -108,6 +116,10 @@ func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
 
 func (d *dockerCli) CmdPs(s ...string) error {
 	return d.caller(d.cli.CmdPs, "ps", s...)
+}
+
+func (d *dockerCli) CmdStop(s ...string) error {
+	return d.caller(d.cli.CmdStop, "stop", s...)
 }
 
 func (d *dockerCli) CmdWait(s ...string) error {
@@ -228,4 +240,8 @@ func (i *interestingPartsOfInspect) CreatedTime() time.Time {
 
 func (i *interestingPartsOfInspect) ContainerName() string {
 	return i.Name
+}
+
+func (i *interestingPartsOfInspect) Running() bool {
+	return i.Status.Running
 }

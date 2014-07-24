@@ -51,5 +51,5 @@ func constructEctdHost() string {
 		fmt.Fprintf(os.Stderr, "your DOCKER_HOST is probably bogus (%s) and should be 'tcp://host:port'\n",
 			os.Getenv("DOCKER_HOST"))
 	}
-	return hostPort[0] + ":4001"
+	return "http://" + hostPort[0] + ":4001"
 }

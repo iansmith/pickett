@@ -157,6 +157,20 @@ func (_mr *_MockDockerCliRecorder) CmdAttach(arg0 ...interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdAttach", arg0...)
 }
 
+func (_m *MockDockerCli) CmdStop(_param0 ...string) error {
+	_s := []interface{}{}
+	for _, _x := range _param0 {
+		_s = append(_s, _x)
+	}
+	ret := _m.ctrl.Call(_m, "CmdStop", _s...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdStop(arg0 ...interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdStop", arg0...)
+}
+
 func (_m *MockDockerCli) Stdout() string {
 	ret := _m.ctrl.Call(_m, "Stdout")
 	ret0, _ := ret[0].(string)
@@ -269,4 +283,14 @@ func (_m *MockInspected) ContainerName() string {
 
 func (_mr *_MockInspectedRecorder) ContainerName() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerName")
+}
+
+func (_m *MockInspected) Running() bool {
+	ret := _m.ctrl.Call(_m, "Running")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockInspectedRecorder) Running() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Running")
 }

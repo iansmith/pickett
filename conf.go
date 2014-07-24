@@ -302,9 +302,6 @@ func (c *Config) newLayer3Worker(l3 *Layer3Service) (*layer3WorkerRunner, error)
 	result := &layer3WorkerRunner{
 		name: l3.Name,
 	}
-	if len(l3.EntryPoint) == 0 {
-		return nil, errors.New(fmt.Sprintf("cannot have an empty entry point (in %s)", l3.Name))
-	}
 	result.entryPoint = l3.EntryPoint
 	return result, nil
 }
@@ -387,7 +384,11 @@ func (c *Config) Initiate(name string, helper pickett_io.Helper, cli pickett_io.
 	//might be a node that can be run
 	r, ok := node.Worker().(runner)
 	if ok {
-		err = r.run(helper, cli, etcd, vbox)
+		in, err := r.run(helper, cli, etcd, vbox)
+		if err != nil {
+			return err
+		}
+		err = cli.CmdAttach(in.containerName)
 		if err != nil {
 			return err
 		}

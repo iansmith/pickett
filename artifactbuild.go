@@ -39,6 +39,7 @@ func (a *artifactWorker) ood(conf *Config, helper io.Helper, cli io.DockerCli,
 		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", a.tag, a.runIn.Name())
 		return time.Time{}, true, nil
 	}
+
 	fmt.Printf("[pickett] '%s' is up to date\n", a.tag)
 	return t, false, nil
 }
@@ -49,12 +50,20 @@ func (a *artifactWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
 		return time.Time{}, errors.New("not clever enough to copy artifacts that are not on a code volume!")
 	}
 	dir := helper.DirectoryRelative(conf.CodeVolume.Directory)
+	path := dir
+	var err error
+	if vbox.NeedPathTranslation() {
+		path, err = vbox.CodeVolumeToVboxPath(dir)
+		if err != nil {
+			return time.Time{}, err
+		}
+	}
 	curr := a.mergeWith.Name()
 
 	for k, v := range a.artifacts {
 		runCmd := []string{
 			"-v",
-			fmt.Sprintf("%s:%s", dir, conf.CodeVolume.MountedAt),
+			fmt.Sprintf("%s:%s", path, conf.CodeVolume.MountedAt),
 			fmt.Sprintf("%s", curr),
 			"cp",
 			fmt.Sprintf("%s", k),
@@ -75,7 +84,7 @@ func (a *artifactWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
 		}
 		curr = cli.LastLineOfStdout()
 	}
-	err := cli.CmdTag(curr, a.tag)
+	err = cli.CmdTag(curr, a.tag)
 	if err != nil {
 		return time.Time{}, err
 	}
