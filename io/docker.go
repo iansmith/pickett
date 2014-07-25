@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -88,9 +89,13 @@ func (d *dockerCli) reset() {
 	d.err.Reset()
 }
 
-func (d *dockerCli) newDocker() *docker.DockerCli {
+func (d *dockerCli) newDocker(other io.Writer) *docker.DockerCli {
 	parts := splitProto()
-	return docker.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, parts[0], parts[1], nil)
+	out := io.Writer(os.Stdout)
+	if other != nil {
+		out = io.MultiWriter(os.Stdout, other)
+	}
+	return docker.NewDockerCli(os.Stdin, out, os.Stderr, parts[0], parts[1], nil)
 }
 
 func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
@@ -98,7 +103,7 @@ func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
 		if d.debug {
 			fmt.Printf("[debug] teeing output, so creating new docker CLI instance for stdout, stderr\n")
 		}
-		return d.newDocker().CmdRun(s...)
+		return d.newDocker(nil).CmdRun(s...)
 	} else {
 		return d.caller(d.cli.CmdRun, "run", s...)
 	}
@@ -188,7 +193,8 @@ func (d *dockerCli) CmdBuild(teeOutput bool, s ...string) error {
 		if d.debug {
 			fmt.Printf("[debug] teeing output to allow build to be seen on stdout, stderr")
 		}
-		return d.newDocker().CmdBuild(s...)
+		d.out.Reset()
+		return d.newDocker(d.out).CmdBuild(s...)
 	}
 	return d.caller(d.cli.CmdBuild, "build", s...)
 }

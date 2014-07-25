@@ -105,9 +105,9 @@ func (b *goWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
 	}
 	for _, seq := range sequence {
 		unpacked := []string(seq)
-		err := cli.CmdRun(false, unpacked...)
+		err := cli.CmdRun(true, unpacked...)
 		if err != nil {
-			cli.DumpErrOutput()
+			//cli.DumpErrOutput()
 			return time.Time{}, err
 		}
 	}

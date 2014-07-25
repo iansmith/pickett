@@ -58,8 +58,13 @@ func (a *artifactWorker) build(conf *Config, helper io.Helper, cli io.DockerCli,
 			return time.Time{}, err
 		}
 	}
-	curr := a.mergeWith.Name()
 
+	var curr string
+	if a.mergeWithNode {
+		curr = a.mergeWith.Name()
+	} else {
+		curr = a.mergeWithImage
+	}
 	for k, v := range a.artifacts {
 		runCmd := []string{
 			"-v",
