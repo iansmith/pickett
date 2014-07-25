@@ -48,6 +48,7 @@ type Layer3Service struct {
 	RunIn      string
 	EntryPoint []string
 	Consumes   []string
+	Policy     string
 }
 
 type Config struct {
@@ -296,11 +297,29 @@ func (c *Config) checkLayer3Nodes(helper pickett_io.Helper, cli pickett_io.Docke
 	return nil
 }
 
+var policyChoices = []policy{
+	NEVER, RESTART, CONTINUE, FRESH, ALWAYS,
+}
+
 //newLayer3Worker creates a new layer3 node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newLayer3Worker(l3 *Layer3Service) (*layer3WorkerRunner, error) {
 	result := &layer3WorkerRunner{
 		name: l3.Name,
+	}
+	foundit := false
+	for _, p := range policyChoices {
+		if strings.ToUpper(l3.Policy) == p.String() {
+			result.policy = p
+			foundit = true
+			break
+		}
+	}
+	if !foundit {
+		if l3.Policy == "" {
+			return nil, errors.New(fmt.Sprintf("no Policy provided for %s, choose one of (NEVER,RESTART,CONTINUE,FRESH,ALWAYS)!", l3.Name))
+		}
+		return nil, errors.New(fmt.Sprintf("unknown policy %s chosen for %s", l3.Policy, l3.Name))
 	}
 	result.entryPoint = l3.EntryPoint
 	return result, nil
@@ -384,11 +403,7 @@ func (c *Config) Initiate(name string, helper pickett_io.Helper, cli pickett_io.
 	//might be a node that can be run
 	r, ok := node.Worker().(runner)
 	if ok {
-		in, err := r.run(helper, cli, etcd, vbox)
-		if err != nil {
-			return err
-		}
-		err = cli.CmdAttach(in.containerName)
+		_, err := r.run(true, helper, cli, etcd, vbox)
 		if err != nil {
 			return err
 		}

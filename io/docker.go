@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -17,10 +16,10 @@ import (
 type interestingPartsOfInspect struct {
 	Created time.Time
 	Name    string
-	Status  interestingPartsOfStatus
+	State   interestingPartsOfState
 }
 
-type interestingPartsOfStatus struct {
+type interestingPartsOfState struct {
 	Running  bool
 	ExitCode int
 }
@@ -42,7 +41,6 @@ type DockerCli interface {
 	EmptyOutput() bool
 	DecodeInspect(...string) (Inspected, error)
 	DumpErrOutput()
-	CloneTeed() DockerCli
 }
 
 type Inspected interface {
@@ -90,17 +88,9 @@ func (d *dockerCli) reset() {
 	d.err.Reset()
 }
 
-func (d *dockerCli) CloneTeed() DockerCli {
-	out := io.MultiWriter(os.Stdout, d.out)
-	err := io.MultiWriter(os.Stderr, d.err)
+func (d *dockerCli) newDocker() *docker.DockerCli {
 	parts := splitProto()
-	cli := docker.NewDockerCli(nil, out, err, parts[0], parts[1], nil)
-	return &dockerCli{
-		out:   d.out,
-		err:   d.err,
-		cli:   cli,
-		debug: d.debug,
-	}
+	return docker.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, parts[0], parts[1], nil)
 }
 
 func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
@@ -108,10 +98,10 @@ func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
 		if d.debug {
 			fmt.Printf("[debug] teeing output, so creating new docker CLI instance for stdout, stderr\n")
 		}
-		clone := d.CloneTeed()
-		return clone.CmdRun(false, s...)
+		return d.newDocker().CmdRun(s...)
+	} else {
+		return d.caller(d.cli.CmdRun, "run", s...)
 	}
-	return d.caller(d.cli.CmdRun, "run", s...)
 }
 
 func (d *dockerCli) CmdPs(s ...string) error {
@@ -195,8 +185,10 @@ func (d *dockerCli) CmdInspect(s ...string) error {
 
 func (d *dockerCli) CmdBuild(teeOutput bool, s ...string) error {
 	if teeOutput {
-		clone := d.CloneTeed()
-		return clone.CmdBuild(false, s...)
+		if d.debug {
+			fmt.Printf("[debug] teeing output to allow build to be seen on stdout, stderr")
+		}
+		return d.newDocker().CmdBuild(s...)
 	}
 	return d.caller(d.cli.CmdBuild, "build", s...)
 }
@@ -243,5 +235,5 @@ func (i *interestingPartsOfInspect) ContainerName() string {
 }
 
 func (i *interestingPartsOfInspect) Running() bool {
-	return i.Status.Running
+	return i.State.Running
 }

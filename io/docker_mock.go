@@ -234,16 +234,6 @@ func (_mr *_MockDockerCliRecorder) DumpErrOutput() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DumpErrOutput")
 }
 
-func (_m *MockDockerCli) CloneTeed() DockerCli {
-	ret := _m.ctrl.Call(_m, "CloneTeed")
-	ret0, _ := ret[0].(DockerCli)
-	return ret0
-}
-
-func (_mr *_MockDockerCliRecorder) CloneTeed() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "CloneTeed")
-}
-
 // Mock of Inspected interface
 type MockInspected struct {
 	ctrl     *gomock.Controller

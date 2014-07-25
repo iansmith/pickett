@@ -15,6 +15,7 @@ type layer3WorkerRunner struct {
 	runIn      Node
 	entryPoint []string
 	consumes   []Node //XXX this should be type runner somehow
+	policy     policy
 }
 
 //in returns a single node that is our inbound edge, the container we run in.
@@ -26,29 +27,29 @@ func (l *layer3WorkerRunner) in() []Node {
 	return result
 }
 
-func (l *layer3WorkerRunner) run(helper io.Helper, cli io.DockerCli, etcd io.EtcdClient,
+func (l *layer3WorkerRunner) run(teeOutput bool, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient,
 	vbox io.VirtualBox) (*policyInput, error) {
 
 	links := make(map[string]string)
 	for _, node := range l.consumes {
+		helper.Debug("launching %s because %s consumes it", node.Name(), l.name)
 		r, ok := node.Worker().(*layer3WorkerRunner)
 		if !ok {
 			return nil, errors.New(
 				fmt.Sprintf("%s: can't consume anything other than l3 services: %s", l.name, node.Name()))
 		}
-		input, err := r.run(helper, cli, etcd, vbox)
+		input, err := r.run(false, helper, cli, etcd, vbox)
 		if err != nil {
 			return nil, err
 		}
 		links[input.containerName] = input.service.name
 	}
 
-	in, err := createPolicyInput(l, cli, etcd)
+	in, err := createPolicyInput(l, helper, cli, etcd)
 	if err != nil {
 		return nil, err
 	}
-	myPolicy := ALWAYS
-	return in, myPolicy.appyPolicy(in, links, cli, etcd)
+	return in, l.policy.appyPolicy(teeOutput, in, links, helper, cli, etcd)
 }
 
 // ood is never true, there is no way for us to be out of date.

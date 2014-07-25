@@ -51,10 +51,11 @@ func (_mr *_MockEtcdClientRecorder) Put(arg0, arg1 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Put", arg0, arg1)
 }
 
-func (_m *MockEtcdClient) Del(_param0 string) error {
+func (_m *MockEtcdClient) Del(_param0 string) (string, error) {
 	ret := _m.ctrl.Call(_m, "Del", _param0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 func (_mr *_MockEtcdClientRecorder) Del(arg0 interface{}) *gomock.Call {
