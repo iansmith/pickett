@@ -1,0 +1,41 @@
+
+- clean dependency hell (optional but might be reqired depending of your current state).
+sudo rm -rf ~/DEV/go/src/github.com/docker
+sudo rm -rf ~/DEV/go/src/github.com/dotcloud
+
+- Get updated pickett from my branch at https://github.com/igneous-systems/pickett/tree/docker_1.14
+# This uses docker/docker repos at version 1.14 , no more (just obsoleted) doctcloud/docker
+- Reinstall pickett (godep get, go install etc .....)
+
+- Update docker in vagrant because it's older and incompatible (1.13 VS 1.14)
+#  Until I can work with Byron on having the new version in the VirtualBox image
+po
+ssh vagrant@127.0.0.1 -p 2222
+git clone https://git@github.com/dotcloud/docker
+cd docker
+
+# retart docker with socket as it's required to build docker
+sudo service docker stop 
+sudo docker -d &
+
+sudo make build
+# Go have some some coffee
+sudo docker make binary
+# stop the running docker
+fg + Ctrl-C
+# Copy new docker binary
+sudo cp bundles/1.1.2-dev/binary/docker /usr/bin/docker
+
+# Restart docker
+sudo docker -d -H "tcp://0.0.0.0:2375" &
+
+exit
+
+-----end vagrant---
+
+export DOCKER_HOST="tcp://127.0.0.1:2375"
+docker version  # Should show 1.14 on both client and server
+
+- Go ask Pickett the weather !
+pickett weather-client
+
