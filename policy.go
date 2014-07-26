@@ -44,6 +44,9 @@ func (p *policyInput) start(teeOutput bool, image string, links map[string]strin
 	for k, v := range links {
 		args = append(args, "--link", fmt.Sprintf("%s:%s", k, v))
 	}
+	for k, v := range p.service.expose {
+		args = append(args, "-p", fmt.Sprintf("%s:%d:%d", k, v, v))
+	}
 	args = append(append(args, image), p.service.entryPoint...)
 	err := cli.CmdRun(teeOutput, args...)
 	if err != nil {

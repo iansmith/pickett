@@ -24,10 +24,12 @@ type CodeVolume struct {
 }
 
 type GoBuild struct {
-	RunIn                    string
-	Tag                      string
-	InstallGoPackages        []string
-	InstallAndTestGoPackages []string
+	Command  string
+	RunIn    string
+	Tag      string
+	Packages []string
+	TestFile string
+	Probe    string
 }
 
 type GenericBuild struct {
@@ -49,6 +51,7 @@ type Layer3Service struct {
 	EntryPoint []string
 	Consumes   []string
 	Policy     string
+	Expose     map[string]int
 }
 
 type Config struct {
@@ -146,16 +149,22 @@ func (c *Config) checkSourceNodes(helper pickett_io.Helper, cli pickett_io.Docke
 	return nil
 }
 
-// Sinks() return a list of the names of sinks you might want to build.
-func (c *Config) Sinks() []string {
-	result := []string{}
+// EntryPoints returns two lists, the list of buildable targets and the list of runnable
+// targets.
+func (c *Config) EntryPoints() ([]string, []string) {
+	r1 := []string{}
+	r2 := []string{}
 	for _, v := range c.nameToNode {
 		if !v.IsSink() {
 			continue
 		}
-		result = append(result, v.Name())
+		if _, ok := v.Worker().(runner); ok {
+			r2 = append(r2, v.Name())
+		} else {
+			r1 = append(r1, v.Name())
+		}
 	}
-	return result
+	return r1, r2
 }
 
 // checkGoBuildNodes verifies all the "go build" nodes in this pickett file.  Note that
@@ -305,7 +314,8 @@ var policyChoices = []policy{
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newLayer3Worker(l3 *Layer3Service) (*layer3WorkerRunner, error) {
 	result := &layer3WorkerRunner{
-		name: l3.Name,
+		name:   l3.Name,
+		expose: l3.Expose,
 	}
 	foundit := false
 	for _, p := range policyChoices {
@@ -351,16 +361,22 @@ func (c *Config) newGoWorker(build *GoBuild) (*goWorker, error) {
 	result := &goWorker{
 		tag: build.Tag,
 	}
-	if len(build.InstallGoPackages) != 0 && len(build.InstallAndTestGoPackages) != 0 {
-		return nil, errors.New(fmt.Sprintf("%s must define only one of InstallGoPackages and InstallAndTestGoPackages", build.Tag))
+	if len(build.Packages) == 0 {
+		return nil, errors.New("you must define at least one source package for a go build")
 	}
-	if len(build.InstallGoPackages) != 0 {
-		result.pkgs = build.InstallGoPackages
-		result.test = false
+	result.pkgs = build.Packages
+	if build.Command != "" {
+		result.command = build.Command
+	} else {
+		result.command = "go install"
 	}
-	if len(build.InstallAndTestGoPackages) != 0 {
-		result.test = true
-		result.pkgs = build.InstallAndTestGoPackages
+	if build.TestFile != "" {
+		result.testFile = build.TestFile
+	}
+	if build.Probe != "" {
+		result.probe = build.Probe
+	} else {
+		result.probe = "go install -n"
 	}
 	return result, nil
 }
@@ -387,19 +403,29 @@ func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error
 	return worker, nil
 }
 
-// Initiate is alled by the "main()" of the pickett program to build a "target".
+// Build is alled by the "main()" of the pickett program to build a "target".
 // It requires that you supply the various IO objects because these are passed around
 // internally but never created.
-func (c *Config) Initiate(name string, helper pickett_io.Helper, cli pickett_io.DockerCli,
+func (c *Config) Build(name string, helper pickett_io.Helper, cli pickett_io.DockerCli,
 	etcd pickett_io.EtcdClient, vbox pickett_io.VirtualBox) error {
 	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
 	if !isPresent {
 		return errors.New(fmt.Sprintf("no such target for build or run: %s", name))
 	}
-	err := node.Build(c, helper, cli, etcd, vbox)
-	if err != nil {
-		return err
+	return node.Build(c, helper, cli, etcd, vbox)
+}
+
+// Execute is alled by the "main()" of the pickett program to run a "target".
+// It requires that you supply the various IO objects because these are passed around
+// internally but never created.
+func (c *Config) Execute(name string, helper pickett_io.Helper, cli pickett_io.DockerCli,
+	etcd pickett_io.EtcdClient, vbox pickett_io.VirtualBox) error {
+
+	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
+	if !isPresent {
+		return errors.New(fmt.Sprintf("no such target for build or run: %s", name))
 	}
+
 	//might be a node that can be run
 	r, ok := node.Worker().(runner)
 	if ok {
@@ -407,6 +433,8 @@ func (c *Config) Initiate(name string, helper pickett_io.Helper, cli pickett_io.
 		if err != nil {
 			return err
 		}
+	} else {
+		return errors.New(fmt.Sprintf("target %s is not eecutable", name))
 	}
 	return nil
 }

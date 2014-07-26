@@ -38,6 +38,9 @@ func validateDockerHost() error {
 	parts := strings.Split(raw, "://")
 	second := parts[1]
 	if len(strings.Split(second, ":")) != 2 {
+		if parts[0] == "unix" {
+			return nil
+		}
 		return BAD_DOCKER_HOST_FORMAT
 	}
 	return nil
@@ -46,6 +49,9 @@ func validateDockerHost() error {
 //construct ectd host from splitProto, assumes validateDockerHost already called
 func constructEctdHost() string {
 	pair := splitProto()
+	if pair[0] == "unix" {
+		return "http://localhost:4001"
+	}
 	hostPort := strings.Split(pair[1], ":")
 	if len(hostPort) != 2 {
 		fmt.Fprintf(os.Stderr, "your DOCKER_HOST is probably bogus (%s) and should be 'tcp://host:port'\n",

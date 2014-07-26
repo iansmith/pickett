@@ -26,10 +26,24 @@ func NewEtcdClient(debug bool) (EtcdClient, error) {
 		client: etcd.NewClient([]string{constructEctdHost()}),
 		debug:  debug,
 	}
+	/*	client, err := etcd.NewTLSClient(
+				[]string{"https://iansmith.iggy.bz:4001"},
+				"/home/iansmith/.docker/cert.pem",
+				"/home/iansmith/.docker/key.pem",
+				"/home/iansmith/.docker/ca.pem")
+			if err != nil {
+				panic(err)
+			}
+		result := &etcdClient{
+			client: client,
+			debug:  debug,
+		}*/
+
 	_, err := result.client.Get("/blah/blah/blah", false, false)
 	if err == nil {
 		panic("should not be able to retreive /blah/blah/blah")
 	}
+	/*fmt.Printf("ETCD SENT A RESULT! %v\n", err)*/
 	e := err.(*etcd.EtcdError)
 	if e.ErrorCode != 100 {
 		return nil, e

@@ -39,7 +39,7 @@ type DockerCli interface {
 	Stdout() string
 	LastLineOfStdout() string
 	Stderr() string
-	EmptyOutput() bool
+	EmptyOutput(bool) bool
 	DecodeInspect(...string) (Inspected, error)
 	DumpErrOutput()
 }
@@ -52,33 +52,35 @@ type Inspected interface {
 
 //NewDocker returns a connection to the docker server.  Pickett assumes that
 //the DockerCli is "passed in from the outside".
-func NewDockerCli(debug bool) (DockerCli, error) {
+func NewDockerCli(debug, showDocker bool) (DockerCli, error) {
 	if err := validateDockerHost(); err != nil {
 		return nil, err
 	}
-	return newDockerCli(debug), nil
+	return newDockerCli(debug, showDocker), nil
 }
 
 type dockerCli struct {
-	out, err *bytes.Buffer
-	cli      *docker.DockerCli
-	debug    bool
+	out, err   *bytes.Buffer
+	cli        *docker.DockerCli
+	debug      bool
+	showDocker bool
 }
 
 // newDockerCli builds a new docker interface and returns it. It
 // assumes that the DOCKER_HOST env var has already been
 // validated.
-func newDockerCli(debug bool) DockerCli {
+func newDockerCli(debug, showDocker bool) DockerCli {
 	result := &dockerCli{
-		out:   new(bytes.Buffer),
-		err:   new(bytes.Buffer),
-		debug: debug,
+		out:        new(bytes.Buffer),
+		err:        new(bytes.Buffer),
+		debug:      debug,
+		showDocker: showDocker,
 	}
 
 	parts := splitProto()
 	result.cli = docker.NewDockerCli(nil, result.out, result.err,
 		parts[0], parts[1], nil)
-	if debug {
+	if showDocker {
 		fmt.Printf("[docker cmd] export DOCKER_HOST='%s'\n", os.Getenv("DOCKER_HOST"))
 	}
 	return result
@@ -102,6 +104,9 @@ func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
 	if teeOutput {
 		if d.debug {
 			fmt.Printf("[debug] teeing output, so creating new docker CLI instance for stdout, stderr\n")
+		}
+		if d.showDocker {
+			fmt.Printf("[docker cmd] docker %s %s\n", "run", strings.Trim(fmt.Sprint(s), "[]"))
 		}
 		return d.newDocker(nil).CmdRun(s...)
 	} else {
@@ -141,15 +146,15 @@ func (d *dockerCli) CmdCp(s ...string) error {
 //output in a standard way so all docker commands and theere output look the same.
 func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string) error {
 	d.reset()
-	if d.debug {
+	if d.showDocker {
 		fmt.Printf("[docker cmd] docker %s %s\n", name,
 			strings.Trim(fmt.Sprint(s), "[]"))
 	}
 	err := fn(s...)
-	if err != nil && d.debug {
+	if err != nil && d.showDocker {
 		fmt.Printf("[docker result error!] %v\n", err)
 		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
-	} else if d.debug {
+	} else if d.showDocker {
 		if d.out.String() != "" {
 			lines := strings.Split(d.out.String(), "\n")
 			lines = lines[0 : len(lines)-1] //remove last \n
@@ -203,15 +208,28 @@ func (d *dockerCli) Stdout() string {
 	return d.out.String()
 }
 
-func (d *dockerCli) EmptyOutput() bool {
-	return d.out.String() == ""
+func (d *dockerCli) EmptyOutput(ignoreComments bool) bool {
+	if !ignoreComments {
+		return d.out.String() == ""
+	}
+	lines := strings.Split(d.out.String(), "\n")
+	for _, l := range lines {
+		if len(l) == 0 {
+			continue
+		}
+		if strings.HasPrefix(l, "#") {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (d *dockerCli) DumpErrOutput() {
-	fmt.Printf("--------------------output----------------------\n")
+	fmt.Printf("--------------------output---------------------- (%d bytes)\n", d.out.Len())
 	fmt.Printf("%s\n", d.out.String())
 	fmt.Printf("------------------------------------------------\n")
-	fmt.Printf("--------------------error-----------------------\n")
+	fmt.Printf("--------------------error-----------------------(%d bytes)\n", d.err.Len())
 	fmt.Printf("%s\n", d.err.String())
 	fmt.Printf("------------------------------------------------\n")
 }

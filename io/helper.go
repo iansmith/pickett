@@ -14,6 +14,7 @@ import (
 type Helper interface {
 	Debug(string, ...interface{})
 	OpenDockerfileRelative(dir string) (io.Reader, error)
+	OpenFileRelative(path string) (*os.File, error)
 	DirectoryRelative(dir string) string
 	Fatalf(string, ...interface{})
 	CheckFatal(error, string, ...interface{})
@@ -55,8 +56,16 @@ func (i *helper) Debug(fmtSpec string, p ...interface{}) {
 // OpenDockerfileRelative returns a reader connected to the Dockerfile
 // requsted in dir (relative to the Pickett.json) or an error.
 func (i *helper) OpenDockerfileRelative(dir string) (io.Reader, error) {
-	i.Debug("OpenDockerfileRelative(%s)-->%s", dir, filepath.Join(i.DirectoryRelative(dir), "Dockerfile"))
+	//i.Debug("OpenDockerfileRelative(%s)-->%s", dir, filepath.Join(i.DirectoryRelative(dir), "Dockerfile"))
 	return os.Open(filepath.Join(i.DirectoryRelative(dir), "Dockerfile"))
+}
+
+// OpenFiles returns an *os.File connected to file path given, relative to the
+// configuration file.
+func (i *helper) OpenFileRelative(path string) (*os.File, error) {
+	dir := filepath.Dir(path)
+	//i.Debug("OpenFileRelative(%s)-->%s", path, filepath.Join(i.DirectoryRelative(dir), filepath.Base(path)))
+	return os.Open(filepath.Join(i.DirectoryRelative(dir), filepath.Base(path)))
 }
 
 // Fatalf prints out a message and exits the program.
@@ -82,7 +91,7 @@ func (i *helper) DirectoryRelative(dir string) string {
 
 // Return a reader hooked to the configuration file we were initial
 func (i *helper) ConfigReader() io.Reader {
-	i.Debug("ConfigReader trying to read %s", i.confFile)
+	//i.Debug("ConfigReader trying to read %s", i.confFile)
 	rd, err := os.Open(i.confFile)
 	//we checked this on creation, so should not fail
 	if err != nil {
@@ -103,7 +112,7 @@ func (i *helper) ConfigFile() string {
 //neither searched nor their timestamps examined.  If there are no entries in the
 //directory, then the latest time is defined to be the zero value of time.Time.
 func (i *helper) LastTimeInDirRelative(dir string) (time.Time, error) {
-	i.Debug("LastTimeInDirRelative(%s)--> %s", dir, i.DirectoryRelative(dir))
+	//i.Debug("LastTimeInDirRelative(%s)--> %s", dir, i.DirectoryRelative(dir))
 	info, err := ioutil.ReadDir(i.DirectoryRelative(dir))
 	if err != nil {
 		return time.Time{}, err

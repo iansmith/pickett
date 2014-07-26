@@ -16,6 +16,7 @@ type layer3WorkerRunner struct {
 	entryPoint []string
 	consumes   []Node //XXX this should be type runner somehow
 	policy     policy
+	expose     map[string]int
 }
 
 //in returns a single node that is our inbound edge, the container we run in.
