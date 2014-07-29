@@ -228,10 +228,6 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 	return nil
 }
 
-var policyChoices = []string{
-	"BY_HAND", "KEEP_UP", "CONTINUE", "FRESH", "ALWAYS",
-}
-
 //newNetworkRunner creates a new networkRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
@@ -239,34 +235,23 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 		n:      n.Name,
 		expose: n.Expose,
 	}
-	foundit := false
 	pol := defaultPolicy()
-	for _, named := range policyChoices {
-		if strings.ToUpper(n.Policy) == named {
-			switch named {
-			case "BY_HAND":
-				pol.startIfNonExistant = false
-				pol.stop = NEVER
-				pol.rebuildIfOOD = false
-			case "KEEP_UP":
-				pol.stop = NEVER
-			case "CONTINUE":
-				pol.stop = NEVER
-				pol.start = CONTINUE
-			case "FRESH":
-				//nothing to do, its all defaults
-			case "ALWAYS":
-				pol.stop = ALWAYS
-			}
-			foundit = true
-			break
-		}
-	}
-	//we allow an empty string to mean FRESH
-	if !foundit {
-		if n.Policy != "" {
-			return nil, fmt.Errorf("unknown policy %s chosen for %s", n.Policy, n.Name)
-		}
+	switch strings.ToUpper(n.Policy) {
+	case "BY_HAND":
+		pol.startIfNonExistant = false
+		pol.stop = NEVER
+		pol.rebuildIfOOD = false
+	case "KEEP_UP":
+		pol.stop = NEVER
+	case "CONTINUE":
+		pol.stop = NEVER
+		pol.start = CONTINUE
+	case "FRESH", "": //we allow an empty string to mean FRESH
+		//nothing to do, its all defaults
+	case "ALWAYS":
+		pol.stop = ALWAYS
+	default:
+		return nil, fmt.Errorf("unknown policy %s chosen for %s", n.Policy, n.Name)
 	}
 	result.policy = pol
 
