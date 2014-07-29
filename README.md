@@ -5,11 +5,14 @@
 Assuming you have a modern version of go already installed:
 
 ```
-mkdir -p /tmp/foo/src
-export GOPATH=/tmp/foo
-export PATH=$PATH:/tmp/foo/bin
+# Set up GOPATH in your home directory:
+export GOPATH=$HOME/go
+mkdir -p $GOPATH/src
+export PATH=$PATH:$GOPATH/bin
+# Get and run godep over pickett sources
 go get github.com/tools/godep
 godep get github.com/igneous-systems/pickett/pickett
+# Install pickett
 go install github.com/igneous-systems/pickett/pickett
 ```
 The next to last one may take a while to pull down all the dependencies.

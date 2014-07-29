@@ -3,7 +3,6 @@ package pickett
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -110,8 +109,8 @@ func (c *Config) sourceNodes(helper pickett_io.IOHelper) error {
 		for _, source := range img.DependsOn {
 			node_source, ok := c.nameToNode[source]
 			if !ok {
-				return errors.New(fmt.Sprintf("image %s depends on %s, but %s not found",
-					img.Tag, source, source))
+				return fmt.Errorf("image %s depends on %s, but %s not found",
+					img.Tag, source, source)
 			}
 			node_source.AddOut(dest)
 			work.inEdges = append(work.inEdges, node_source)
@@ -144,8 +143,8 @@ func (c *Config) goBuildNodes() ([]Node, error) {
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find %s trying to build %s",
-				build.RunIn, build.Tag))
+			return nil, fmt.Errorf("Unable to find %s trying to build %s",
+				build.RunIn, build.Tag)
 		}
 
 		//add edges
@@ -172,18 +171,18 @@ func (c *Config) artifactBuildNodes() ([]Node, error) {
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build RunIn '%s'",
-				build.RunIn, build.Tag))
+			return nil, fmt.Errorf("Unable to find '%s' trying to build RunIn '%s'",
+				build.RunIn, build.Tag)
 		}
 		m, found := c.nameToNode[build.MergeWith]
 		if !found {
-			return nil, errors.New(fmt.Sprintf("Unable to find '%s' trying to build MergeWith of  '%s'",
-				build.MergeWith, build.Tag))
+			return nil, fmt.Errorf("Unable to find '%s' trying to build MergeWith of  '%s'",
+				build.MergeWith, build.Tag)
 		}
 		// handle dependency edges
 		if _, ok := r.Worker().(*goWorker); !ok {
-			return nil, errors.New(fmt.Sprintf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
-				build.Tag, r.Name()))
+			return nil, fmt.Errorf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
+				build.Tag, r.Name())
 		}
 		w.runIn = r
 		w.mergeWith = m
@@ -210,8 +209,8 @@ func (c *Config) newSourceWorker(src *Source, helper pickett_io.IOHelper) (*sour
 	}
 	_, err := helper.OpenDockerfileRelative(src.Directory)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("looked for %s/Dockerfile: %v",
-			helper.DirectoryRelative(src.Directory), err))
+		return nil, fmt.Errorf("looked for %s/Dockerfile: %v",
+			helper.DirectoryRelative(src.Directory), err)
 	}
 	return node, nil
 }
@@ -224,7 +223,7 @@ func (c *Config) newGoWorker(build *GoBuild) (*goWorker, error) {
 		tag: build.Tag,
 	}
 	if len(build.InstallGoPackages) != 0 && len(build.InstallAndTestGoPackages) != 0 {
-		return nil, errors.New(fmt.Sprintf("%s must define only one of InstallGoPackages and InstallAndTestGoPackages", build.Tag))
+		return nil, fmt.Errorf("%s must define only one of InstallGoPackages and InstallAndTestGoPackages", build.Tag)
 	}
 	if len(build.InstallGoPackages) != 0 {
 		result.pkgs = build.InstallGoPackages
@@ -242,13 +241,13 @@ func (c *Config) newGoWorker(build *GoBuild) (*goWorker, error) {
 // fail. It ignores dependency edges.
 func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error) {
 	if len(build.Artifacts) == 0 {
-		return nil, errors.New(fmt.Sprintf("%s must define at least one artifact", build.Tag))
+		return nil, fmt.Errorf("%s must define at least one artifact", build.Tag)
 	}
 	art := make(map[string]string)
 	for k, v := range build.Artifacts {
 		s, ok := v.(string)
 		if !ok {
-			return nil, errors.New(fmt.Sprintf("%v must be a string (in artifacts of %s)!", v, build.Tag))
+			return nil, fmt.Errorf("%v must be a string (in artifacts of %s)!", v, build.Tag)
 		}
 		art[k] = s
 	}
@@ -264,7 +263,7 @@ func (c *Config) newArtifactWorker(build *ArtifactBuild) (*artifactWorker, error
 func (c *Config) Initiate(name string, helper pickett_io.IOHelper, cli pickett_io.DockerCli) error {
 	node, isPresent := c.nameToNode[name]
 	if !isPresent {
-		return errors.New(fmt.Sprintf("no such target: %s", name))
+		return fmt.Errorf("no such target: %s", name)
 	}
 	return node.Build(c, helper, cli)
 }

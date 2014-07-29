@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -93,17 +92,17 @@ func (b *goWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCli) (ti
 	}
 	err := cli.CmdPs("-q", "-l")
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to ps (%s): %v", b.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to ps (%s): %v", b.tag, err)
 	}
 	id := cli.LastLineOfStdout()
 	//command was ok, we need to tag it now
 	err = cli.CmdCommit(id, b.tag)
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to commit (%s): %v", b.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to commit (%s): %v", b.tag, err)
 	}
 	insp, err := cli.DecodeInspect(b.tag)
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to inspect (%s): %v", b.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to inspect (%s): %v", b.tag, err)
 	}
 	return insp.CreatedTime(), nil
 }
