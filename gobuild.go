@@ -4,111 +4,144 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/igneous-systems/pickett/io"
 )
 
-// goworker has a dependecy between the object to build and the image
-// that is used to build it.  This implements the worker interface.
-type goWorker struct {
-	runIn Node
-	tag   string
-	pkgs  []string
-	test  bool
+// goBuilder has a dependecy between the object to build and the image
+// that is used to build it.  This implements the builder interface.
+type goBuilder struct {
+	runIn    node
+	tag      string
+	pkgs     []string
+	testFile string
+	command  string
+	probe    string
 }
 
 type buildCommand []string
 
 // ood is true if we are older than our build in container.  We are also out of date
 // if source has changed.
-func (b *goWorker) ood(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, bool, error) {
-	t, err := tagToTime(b.tag, cli)
+func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
+	t, err := tagToTime(g.tag, conf.cli)
 	if err != nil {
 		return time.Time{}, true, err
 	}
 	if t.IsZero() {
-		fmt.Printf("[pickett] Building %s (tag not found)\n", b.tag)
+		fmt.Printf("[pickett] Building %s, tag not found.\n", g.tag)
 		return time.Time{}, true, nil
 	}
-	if t.Before(b.runIn.Time()) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", b.tag, b.runIn.Name())
+	if t.Before(g.runIn.time()) {
+		fmt.Printf("[pickett] Building %s, out of date with respect to '%s'.\n", g.tag, g.runIn.name())
 		return time.Time{}, true, nil
 	}
-	//we need to do this to test our source code for OOD
-	sequence := b.formBuildCommand(conf, true, helper)
-	for i, seq := range sequence {
-		unpacked := []string(seq)
-		if err := cli.CmdRun(unpacked...); err != nil {
+
+	//This is here to support godeps.
+	if g.testFile != "" {
+		f, err := conf.helper.OpenFileRelative(g.testFile)
+		if err != nil {
 			return time.Time{}, true, err
 		}
-		if !cli.EmptyOutput() {
-			fmt.Printf("[pickett] Building %s (out of date with respect to source in %s)\n", b.tag, b.pkgs[i])
-			return time.Time{}, true, nil
+		info, err := f.Stat()
+		if err != nil {
+			return time.Time{}, true, err
 		}
+		conf.helper.Debug("mod time of %s is %v", g.testFile, info.ModTime())
+		if t.Before(info.ModTime()) {
+			return info.ModTime(), true, nil
+		}
+		fmt.Printf("[pickett] '%s' is up to date with respect to %s\n.", g.tag, g.testFile)
+		return t, false, nil
 	}
-	//if we reach here, we tried all the code and found it up to date
-	insp, err := cli.DecodeInspect(b.tag)
+
+	/// this case tests the go source code with a sequence of probes
+
+	//we need to do this to test our source code for OOD
+	sequence, err := g.formBuildCommand(conf, true)
 	if err != nil {
 		return time.Time{}, true, err
 	}
-	fmt.Printf("[pickett] '%s' is up to date with respect to its source code.\n", b.tag)
-	return insp.CreatedTime(), false, nil
+	for i, seq := range sequence {
+		unpacked := []string(seq)
+		if err := conf.cli.CmdRun(false, unpacked...); err != nil {
+			return time.Time{}, true, err
+		}
+		if !conf.cli.EmptyOutput(true) {
+			fmt.Printf("[pickett] Building %s, out of date with respect to source in %s.\n", g.tag, g.pkgs[i])
+			return time.Time{}, true, nil
+		}
+	}
+
+	fmt.Printf("[pickett] '%s' is up to date with respect to its source code.\n", g.tag)
+	return t, false, nil
 }
 
-func (b *goWorker) formBuildCommand(conf *Config, dontExecute bool, helper io.IOHelper) []buildCommand {
+//formBuildCommand is a helper for forming the sequence of build-related commands to
+//either probe for code out of date or build it.
+func (g *goBuilder) formBuildCommand(conf *Config, dontExecute bool) ([]buildCommand, error) {
 	result := []buildCommand{}
 
 	baseArgs := []string{}
 	if conf.CodeVolume.Directory != "" {
-		dir := helper.DirectoryRelative(conf.CodeVolume.Directory)
-		baseArgs = append(baseArgs, "-v", dir+":"+conf.CodeVolume.MountedAt)
+		dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
+		mapped := dir
+		if conf.vbox.NeedPathTranslation() {
+			var err error
+			mapped, err = conf.vbox.CodeVolumeToVboxPath(dir)
+			if err != nil {
+				return nil, err
+			}
+		}
+		baseArgs = append(baseArgs, "-v", mapped+":"+conf.CodeVolume.MountedAt)
 	}
-	baseCmd := "install"
-	if b.test {
-		baseCmd = "test"
-	}
+	var baseCmd []string
 	if dontExecute {
-		baseCmd = baseCmd + " -n"
+		baseCmd = strings.Split(strings.Trim(g.probe, " \n"), " ")
+	} else {
+		baseCmd = strings.Split(strings.Trim(g.command, " \n"), " ")
 	}
-
-	for _, p := range b.pkgs {
-		cmd := fmt.Sprintf("%s go %s %s", b.runIn.Name(), baseCmd, p)
+	strCmd := strings.Trim(fmt.Sprint(baseCmd), "[]")
+	for _, p := range g.pkgs {
+		cmd := fmt.Sprintf("%s %s %s", g.runIn.name(), strCmd, p)
 		cmdArgs := append(baseArgs, strings.Split(cmd, " ")...)
 		result = append(result, buildCommand(cmdArgs))
 	}
-	return result
+	return result, nil
 }
 
-func (b *goWorker) build(conf *Config, helper io.IOHelper, cli io.DockerCli) (time.Time, error) {
+//build does the work of actually building go source code.
+func (g *goBuilder) build(conf *Config) (time.Time, error) {
 
-	//we need to do this to test our source code for OOD
-	sequence := b.formBuildCommand(conf, false, helper)
+	sequence, err := g.formBuildCommand(conf, false)
+	if err != nil {
+		return time.Time{}, err
+	}
 	for _, seq := range sequence {
 		unpacked := []string(seq)
-		err := cli.CmdRun(unpacked...)
+		err := conf.cli.CmdRun(true, unpacked...)
 		if err != nil {
+			conf.cli.DumpErrOutput()
 			return time.Time{}, err
 		}
 	}
-	err := cli.CmdPs("-q", "-l")
+	err = conf.cli.CmdPs("-q", "-l")
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed trying to ps (%s): %v", b.tag, err)
+		return time.Time{}, fmt.Errorf("failed trying to ps (%s): %v", g.tag, err)
 	}
-	id := cli.LastLineOfStdout()
+	id := conf.cli.LastLineOfStdout()
 	//command was ok, we need to tag it now
-	err = cli.CmdCommit(id, b.tag)
+	err = conf.cli.CmdCommit(id, g.tag)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed trying to commit (%s): %v", b.tag, err)
+		return time.Time{}, fmt.Errorf("failed trying to commit (%s): %v", g.tag, err)
 	}
-	insp, err := cli.DecodeInspect(b.tag)
+	insp, err := conf.cli.DecodeInspect(g.tag)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed trying to inspect (%s): %v", b.tag, err)
+		return time.Time{}, fmt.Errorf("failed trying to inspect (%s): %v", g.tag, err)
 	}
 	return insp.CreatedTime(), nil
 }
 
-func (g *goWorker) in() []Node {
-	return []Node{
+func (g *goBuilder) in() []node {
+	return []node{
 		g.runIn,
 	}
 }

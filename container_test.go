@@ -23,7 +23,8 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	defer controller.Finish()
 
 	cli := io.NewMockDockerCli(controller)
-	helper := io.NewMockIOHelper(controller)
+	helper := io.NewMockHelper(controller)
+	etcd := io.NewMockEtcdClient(controller)
 
 	//ignore debug messages
 	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
@@ -37,7 +38,7 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	helper.EXPECT().DirectoryRelative(MYDIR).Return(DIR)
 
 	//ignoring error is ok because tested in TestConf
-	c, _ := NewConfig(strings.NewReader(example1), helper)
+	c, _ := NewConfig(strings.NewReader(example1), helper, cli, etcd, nil)
 
 	now := time.Now()
 	thirtyAgo := now.Add(-30 * time.Minute)
@@ -58,7 +59,7 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	cli.EXPECT().DecodeInspect(BLETCH).Return(nowStamp, nil).After(first)
 
 	//get this after the first time check comparing directry time to hourStamp
-	cli.EXPECT().CmdBuild("-foo", "-bar", DIR).Return(nil)
+	cli.EXPECT().CmdBuild(true, "-foo", "-bar", DIR).Return(nil)
 	cli.EXPECT().LastLineOfStdout().Return(SUCCESS_MAGIC + SOMEID)
 	cli.EXPECT().CmdTag("-f", SOMEID, BLETCH).Return(nil)
 
@@ -66,16 +67,16 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	//at start, we don't know antyhing about the time
 	//
 	node := c.nameToNode["blah/bletch"]
-	if !node.Time().IsZero() {
-		t.Fatalf("failed to initialize times correctly: %v\n", node.Time())
+	if !node.time().IsZero() {
+		t.Fatalf("failed to initialize times correctly: %v\n", node.time())
 	}
-	c.Initiate("blah/bletch", helper, cli)
+	c.Build("blah/bletch")
 
 	//
 	// we have rebuilt, check the time on the node
 	//
-	if node.Time() != now {
-		t.Fatalf("failed to update the time correctly: %v\n", node.Time())
+	if node.time() != now {
+		t.Fatalf("failed to update the time correctly: %v\n", node.time())
 	}
 
 }
