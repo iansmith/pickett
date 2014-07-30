@@ -37,9 +37,7 @@ Pickett assumes that you are running a VM with an appropriate version of docker,
 
 ```
 # Start the VM
-cd
-ln -s Vagrantfile $GOPATH/src/github.com/igneous-sytems/pickett/Vagrantfile
-ln -s provision.sh $GOPATH/src/github.com/igneous-systems/pickett/provision.sh
+cd $GOPATH/src/github.com/igneous-systems/pickett
 vagrant up
 vagrant ssh
 sudo docker -d -H "tcp://0.0.0.0:2375" &
