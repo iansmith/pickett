@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -14,15 +13,15 @@ import (
 func (c *Config) checkExistingName(proposed string, wantNode bool) error {
 	p := strings.Trim(proposed, " \n")
 	if p == "" {
-		return errors.New(fmt.Sprintf("can't have an empty name in configuration file"))
+		return fmt.Errorf("can't have an empty name in configuration file")
 	}
 	if wantNode {
-		if _, ok := c.nameToNode[p]; ok {
-			return errors.New(fmt.Sprintf("name %s already in use in this configuration (build node)"))
+		if c.nameToNode[p] != nil {
+			return fmt.Errorf("name %s already in use in this configuration (build node)", p)
 		}
 	}
-	if _, ok := c.nameToNetwork[p]; ok {
-		return errors.New(fmt.Sprintf("network name %s already in use in this configuration"))
+	if c.nameToNetwork[p] != nil {
+		return fmt.Errorf("network name %s already in use in this configuration", p)
 	}
 	return nil
 }
@@ -48,8 +47,8 @@ func (c *Config) checkContainerNodes(helper pickett_io.Helper, cli pickett_io.Do
 		for _, source := range img.DependsOn {
 			node_source, ok := c.nameToNode[source]
 			if !ok {
-				return errors.New(fmt.Sprintf("image %s depends on %s, but %s not found",
-					img.Tag, source, source))
+				return fmt.Errorf("image %s depends on %s, but %s not found",
+					img.Tag, source, source)
 			}
 			node_source.addOut(dest)
 			work.inEdges = append(work.inEdges, node_source)
@@ -72,8 +71,8 @@ func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) erro
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return errors.New(fmt.Sprintf("Unable to find %s trying to build %s: maybe you need to 'docker pull' it?",
-				build.RunIn, build.Tag))
+			return fmt.Errorf("Unable to find %s trying to build %s: maybe you need to 'docker pull' it?",
+				build.RunIn, build.Tag)
 		}
 
 		//add edges
@@ -110,8 +109,8 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 			return err
 		}
 		if !c.tagExists(build.RunIn, cli) {
-			return errors.New(fmt.Sprintf("Unable to find '%s' (RunIn) trying to setup for artifact build  '%s': maybe you need to 'docker pull' it?",
-				build.RunIn, build.Tag))
+			return fmt.Errorf("Unable to find '%s' (RunIn) trying to setup for artifact build  '%s': maybe you need to 'docker pull' it?",
+				build.RunIn, build.Tag)
 		}
 		r, found := c.nameToNode[build.RunIn]
 		var in nodeOrName
@@ -123,8 +122,8 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 		w.runIn = in
 
 		if !c.tagExists(build.MergeWith, cli) {
-			return errors.New(fmt.Sprintf("Unable to find '%s' (MergeWith) trying to setup for artifact '%s': maybe you need to 'docker pull' it?",
-				build.MergeWith, build.Tag))
+			return fmt.Errorf("Unable to find '%s' (MergeWith) trying to setup for artifact '%s': maybe you need to 'docker pull' it?",
+				build.MergeWith, build.Tag)
 		}
 		m, found := c.nameToNode[build.MergeWith]
 		var merge nodeOrName
@@ -138,8 +137,8 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 		//
 		_, ok := r.implementation().(*goBuilder)
 		if w.runIn.isNode == false || !ok {
-			return errors.New(fmt.Sprintf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
-				build.Tag, r.name()))
+			return fmt.Errorf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
+				build.Tag, r.name())
 		}
 		node := newNodeImpl(build.Tag, w)
 		if w.runIn.isNode {
@@ -188,8 +187,8 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 		for input, result := range n.CommitOnExit {
 			i := strings.Trim(input, " \n")
 			if !contains(n.Consumes, i) {
-				return errors.New(fmt.Sprintf("can't commit input %s in '%s' because it's not consumed",
-					i, w.name()))
+				return fmt.Errorf("can't commit input %s in '%s' because it's not consumed",
+					i, w.name())
 			}
 			p := &outcomeProxyBuilder{
 				net:         w,
@@ -210,13 +209,13 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 
 		//can't do this check until second pass
 		if !c.tagExists(net.RunIn, cli) {
-			return errors.New(fmt.Sprintf("unable to find image '%s' to run (network) %s in!", net.RunIn, net.Name))
+			return fmt.Errorf("unable to find image '%s' to run (network) %s in!", net.RunIn, net.Name)
 		}
 
 		for _, in := range net.Consumes {
 			other, ok := c.nameToNetwork[in]
 			if !ok {
-				return errors.New(fmt.Sprintf("can't find other network node named %s for %s", in, n.name()))
+				return fmt.Errorf("can't find other network node named %s for %s", in, n.name())
 			}
 			n.consumes = append(n.consumes, other)
 			p, ok := commiters[n.name()]
@@ -229,10 +228,6 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 	return nil
 }
 
-var policyChoices = []string{
-	"BY_HAND", "KEEP_UP", "CONTINUE", "FRESH", "ALWAYS",
-}
-
 //newNetworkRunner creates a new networkRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
@@ -240,34 +235,23 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 		n:      n.Name,
 		expose: n.Expose,
 	}
-	foundit := false
 	pol := defaultPolicy()
-	for _, named := range policyChoices {
-		if strings.ToUpper(n.Policy) == named {
-			switch named {
-			case "BY_HAND":
-				pol.startIfNonExistant = false
-				pol.stop = NEVER
-				pol.rebuildIfOOD = false
-			case "KEEP_UP":
-				pol.stop = NEVER
-			case "CONTINUE":
-				pol.stop = NEVER
-				pol.start = CONTINUE
-			case "FRESH":
-				//nothing to do, its all defaults
-			case "ALWAYS":
-				pol.stop = ALWAYS
-			}
-			foundit = true
-			break
-		}
-	}
-	//we allow an empty string to mean FRESH
-	if !foundit {
-		if n.Policy != "" {
-			return nil, errors.New(fmt.Sprintf("unknown policy %s chosen for %s", n.Policy, n.Name))
-		}
+	switch strings.ToUpper(n.Policy) {
+	case "BY_HAND":
+		pol.startIfNonExistant = false
+		pol.stop = NEVER
+		pol.rebuildIfOOD = false
+	case "KEEP_UP":
+		pol.stop = NEVER
+	case "CONTINUE":
+		pol.stop = NEVER
+		pol.start = CONTINUE
+	case "FRESH", "": //we allow an empty string to mean FRESH
+		//nothing to do, its all defaults
+	case "ALWAYS":
+		pol.stop = ALWAYS
+	default:
+		return nil, fmt.Errorf("unknown policy %s chosen for %s", n.Policy, n.Name)
 	}
 	result.policy = pol
 
@@ -289,8 +273,8 @@ func (c *Config) newContainerBuilder(src *Container, helper pickett_io.Helper) (
 	}
 	_, err := helper.OpenDockerfileRelative(src.Directory)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("looked for %s/Dockerfile: %v",
-			helper.DirectoryRelative(src.Directory), err))
+		return nil, fmt.Errorf("looked for %s/Dockerfile: %v",
+			helper.DirectoryRelative(src.Directory), err)
 	}
 	return node, nil
 }
@@ -303,7 +287,7 @@ func (c *Config) newGoBuilder(build *GoBuild) (*goBuilder, error) {
 		tag: build.Tag,
 	}
 	if len(build.Packages) == 0 {
-		return nil, errors.New("you must define at least one source package for a go build")
+		return nil, fmt.Errorf("you must define at least one source package for a go build")
 	}
 	result.pkgs = build.Packages
 	if build.Command != "" {
@@ -327,13 +311,13 @@ func (c *Config) newGoBuilder(build *GoBuild) (*goBuilder, error) {
 // fail. It ignores dependency edges.
 func (c *Config) newExtractionBuilder(build *Extraction) (*extractionBuilder, error) {
 	if len(build.Artifacts) == 0 {
-		return nil, errors.New(fmt.Sprintf("%s must define at least one artifact", build.Tag))
+		return nil, fmt.Errorf("%s must define at least one artifact", build.Tag)
 	}
 	art := make(map[string]string)
 	for k, v := range build.Artifacts {
 		s, ok := v.(string)
 		if !ok {
-			return nil, errors.New(fmt.Sprintf("%v must be a string (in artifacts of %s)!", v, build.Tag))
+			return nil, fmt.Errorf("%v must be a string (in artifacts of %s)!", v, build.Tag)
 		}
 		art[k] = s
 	}

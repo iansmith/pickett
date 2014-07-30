@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -126,17 +125,17 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 	}
 	err = conf.cli.CmdPs("-q", "-l")
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to ps (%s): %v", g.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to ps (%s): %v", g.tag, err)
 	}
 	id := conf.cli.LastLineOfStdout()
 	//command was ok, we need to tag it now
 	err = conf.cli.CmdCommit(id, g.tag)
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to commit (%s): %v", g.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to commit (%s): %v", g.tag, err)
 	}
 	insp, err := conf.cli.DecodeInspect(g.tag)
 	if err != nil {
-		return time.Time{}, errors.New(fmt.Sprintf("failed trying to inspect (%s): %v", g.tag, err))
+		return time.Time{}, fmt.Errorf("failed trying to inspect (%s): %v", g.tag, err)
 	}
 	return insp.CreatedTime(), nil
 }

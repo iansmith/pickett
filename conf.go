@@ -3,7 +3,6 @@ package pickett
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -140,7 +139,7 @@ func (c *Config) EntryPoints() ([]string, []string) {
 func (c *Config) Build(name string) error {
 	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
 	if !isPresent {
-		return errors.New(fmt.Sprintf("no such target for build: %s", name))
+		return fmt.Errorf("no such target for build: %s", name)
 	}
 	ood, err := node.isOutOfDate(c)
 	if err != nil {
@@ -157,7 +156,7 @@ func (c *Config) Build(name string) error {
 func (c *Config) Execute(name string) error {
 	net, isPresent := c.nameToNetwork[strings.Trim(name, " \n")]
 	if !isPresent {
-		return errors.New(fmt.Sprintf("no such target for build or run: %s", name))
+		return fmt.Errorf("no such target for build or run: %s", name)
 	}
 	rez, deps, err := net.run(true, c)
 	fmt.Printf("execute finished : %+v, %+v\n", rez, deps)

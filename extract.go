@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
@@ -45,7 +44,7 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 //adding it to the merge image (mergeWith)
 func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 	if conf.CodeVolume.MountedAt == "" {
-		return time.Time{}, errors.New("not clever enough to copy artifacts that are not on a code volume!")
+		return time.Time{}, fmt.Errorf("not clever enough to copy artifacts that are not on a code volume!")
 	}
 	dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
 	path := dir
