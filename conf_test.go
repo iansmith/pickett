@@ -12,7 +12,9 @@ import (
 var example1 = `
 // example1
 {
-	"DockerBuildOptions" : ["-foo", "-bar"],
+	"DockerBuildOptions" : {
+	},
+
 	// a comment
 	"CodeVolume" : {
 		"Directory" : "src", //will expand to /home/gredo/src
@@ -27,12 +29,14 @@ var example1 = `
 	],
 	"GoBuilds" : [
 		{
+			"Repository": "test",
 			"RunIn" : "blah/bletch",
 			"Packages": ["p1...", "p2/p3" ],
 			"Command" : "go test",
 			"Tag": "nashville"
 		},
 		{
+			"Repository": "fart",
 			"RunIn" : "blah/bletch",
 			"Packages": ["p4...", "p5/p6" ],
 			"Tag": "chattanooga"
@@ -68,12 +72,5 @@ func TestConf(t *testing.T) {
 	}
 	if c.CodeVolume.Directory != "src" {
 		t.Errorf("failed to parse CodeVolume>Directory")
-	}
-	if len(c.DockerBuildOptions) != 2 {
-		t.Errorf("failed to parse DockerBuildOptions")
-	} else {
-		if c.DockerBuildOptions[0] != "-foo" || c.DockerBuildOptions[1] != "-bar" {
-			t.Errorf("failed to parse DockerBuildOptions: %v", c.DockerBuildOptions)
-		}
 	}
 }

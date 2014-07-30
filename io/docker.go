@@ -1,53 +1,71 @@
 package io
 
 import (
+	"archive/tar"
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
-	"strings"
+	"path/filepath"
 	"time"
 
-	docker "github.com/docker/docker/api/client"
+	"github.com/fsouza/go-dockerclient"
 )
 
-//interestingPartsOfInspect is a utility for pulling things out of the json
-//returned by docker server inspect function.
-type interestingPartsOfInspect struct {
-	Created time.Time
-	Name    string
-	State   interestingPartsOfState
+//hide the docker client side types
+type imageInspect struct {
+	wrapped *docker.Image
 }
 
-type interestingPartsOfState struct {
-	Running  bool
-	ExitCode int
+//hide the docker client side types
+type contInspect struct {
+	wrapped *docker.Container
+}
+
+type Port string
+type PortBinding struct {
+	HostIp   string
+	HostPort string
+}
+
+type RunConfig struct {
+	Image      string
+	Attach     bool
+	Volumes    map[string]string
+	Ports      map[Port][]PortBinding
+	Links      map[string]string
+	WaitOutput bool
+}
+
+type TagInfo struct {
+	Repository string
+	Tag        string
+}
+
+type BuildConfig struct {
+	NoCache                  bool
+	RemoveTemporaryContainer bool
 }
 
 type DockerCli interface {
-	CmdRun(bool, ...string) error
-	CmdPs(...string) error
-	CmdTag(...string) error
-	CmdCommit(...string) error
-	CmdInspect(...string) error
-	CmdBuild(bool, ...string) error
-	CmdCp(...string) error
-	CmdWait(...string) error
-	CmdAttach(...string) error
-	CmdStop(...string) error
-	Stdout() string
-	LastLineOfStdout() string
-	Stderr() string
-	EmptyOutput(bool) bool
-	DecodeInspect(...string) (Inspected, error)
-	DumpErrOutput()
+	CmdRun(*RunConfig, ...string) (*bytes.Buffer, string, error)
+	CmdTag(string, bool, *TagInfo) error
+	CmdCommit(string, *TagInfo) (string, error)
+	CmdBuild(*BuildConfig, string, string) error
+	CmdStop(string) error
+	InspectImage(string) (InspectedImage, error)
+	InspectContainer(string) (InspectedContainer, error)
 }
 
-type Inspected interface {
+type InspectedImage interface {
+	CreatedTime() time.Time
+}
+
+type InspectedContainer interface {
+	Running() bool
 	CreatedTime() time.Time
 	ContainerName() string
-	Running() bool
+	ExitStatus() int
 }
 
 //NewDocker returns a connection to the docker server.  Pickett assumes that
@@ -56,12 +74,11 @@ func NewDockerCli(debug, showDocker bool) (DockerCli, error) {
 	if err := validateDockerHost(); err != nil {
 		return nil, err
 	}
-	return newDockerCli(debug, showDocker), nil
+	return newDockerCli(debug, showDocker)
 }
 
 type dockerCli struct {
-	out, err   *bytes.Buffer
-	cli        *docker.DockerCli
+	client     *docker.Client
 	debug      bool
 	showDocker bool
 }
@@ -69,195 +86,276 @@ type dockerCli struct {
 // newDockerCli builds a new docker interface and returns it. It
 // assumes that the DOCKER_HOST env var has already been
 // validated.
-func newDockerCli(debug, showDocker bool) DockerCli {
+func newDockerCli(debug, showDocker bool) (DockerCli, error) {
 	result := &dockerCli{
-		out:        new(bytes.Buffer),
-		err:        new(bytes.Buffer),
 		debug:      debug,
 		showDocker: showDocker,
 	}
-
-	parts := splitProto()
-	result.cli = docker.NewDockerCli(nil, result.out, result.err,
-		parts[0], parts[1], nil)
+	var err error
+	result.client, err = docker.NewClient(os.Getenv("DOCKER_HOST"))
+	if err != nil {
+		return nil, err
+	}
 	if showDocker {
 		fmt.Printf("[docker cmd] export DOCKER_HOST='%s'\n", os.Getenv("DOCKER_HOST"))
 	}
-	return result
+	return result, nil
 }
 
-func (d *dockerCli) reset() {
-	d.out.Reset()
-	d.err.Reset()
-}
-
-func (d *dockerCli) newDocker(other io.Writer) *docker.DockerCli {
-	parts := splitProto()
-	out := io.Writer(os.Stdout)
-	if other != nil {
-		out = io.MultiWriter(os.Stdout, other)
-	}
-	return docker.NewDockerCli(os.Stdin, out, os.Stderr, parts[0], parts[1], nil)
-}
-
-func (d *dockerCli) CmdRun(teeOutput bool, s ...string) error {
-	if teeOutput {
-		if d.debug {
-			fmt.Printf("[debug] teeing output, so creating new docker CLI instance for stdout, stderr\n")
-		}
-		if d.showDocker {
-			fmt.Printf("[docker cmd] docker %s %s\n", "run", strings.Trim(fmt.Sprint(s), "[]"))
-		}
-		return d.newDocker(nil).CmdRun(s...)
-	} else {
-		return d.caller(d.cli.CmdRun, "run", s...)
-	}
-}
-
-func (d *dockerCli) CmdPs(s ...string) error {
-	return d.caller(d.cli.CmdPs, "ps", s...)
-}
-
-func (d *dockerCli) CmdStop(s ...string) error {
-	return d.caller(d.cli.CmdStop, "stop", s...)
-}
-
-func (d *dockerCli) CmdWait(s ...string) error {
-	return d.caller(d.cli.CmdWait, "wait", s...)
-}
-
-func (d *dockerCli) CmdTag(s ...string) error {
-	return d.caller(d.cli.CmdTag, "tag", s...)
-}
-
-func (d *dockerCli) CmdAttach(s ...string) error {
-	return d.caller(d.cli.CmdAttach, "attach", s...)
-}
-
-func (d *dockerCli) CmdCommit(s ...string) error {
-	return d.caller(d.cli.CmdCommit, "commit", s...)
-}
-
-func (d *dockerCli) CmdCp(s ...string) error {
-	return d.caller(d.cli.CmdCp, "cp", s...)
-}
-
-//caller calls the clientAPI of docker on a function of your choice.  This handles the debugging
-//output in a standard way so all docker commands and theere output look the same.
-func (d *dockerCli) caller(fn func(s ...string) error, name string, s ...string) error {
-	d.reset()
-	if d.showDocker {
-		fmt.Printf("[docker cmd] docker %s %s\n", name,
-			strings.Trim(fmt.Sprint(s), "[]"))
-	}
-	err := fn(s...)
-	if err != nil && d.showDocker {
-		fmt.Printf("[docker result error!] %v\n", err)
-		fmt.Printf("[err] %s\n", strings.Trim(d.err.String(), "\n"))
-	} else if d.showDocker {
-		if d.out.String() != "" {
-			lines := strings.Split(d.out.String(), "\n")
-			lines = lines[0 : len(lines)-1] //remove last \n
-			if len(lines) == 1 {
-				fmt.Printf("[docker result] %s\n", lines[0])
+func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Container, error) {
+	tries := 0
+	ok := false
+	var cont *docker.Container
+	var err error
+	var opts docker.CreateContainerOptions
+	for tries < 3 {
+		opts.Config = config
+		opts.Name = newPhrase()
+		cont, err = d.client.CreateContainer(opts)
+		if err != nil {
+			detail, ok := err.(*docker.Error)
+			if ok && detail.Status == 409 {
+				tries++
+				continue
 			} else {
-				fmt.Printf("[docker result (%d lines)] %s\n",
-					len(lines), d.LastLineOfStdout())
+				return nil, err
 			}
 		}
+		ok = true
+		break
 	}
-	return err
+	if !ok {
+		opts.Name = "" //fallback
+		cont, err = d.client.CreateContainer(opts)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cont, nil
 }
 
-//DecodeInspect calls the nispect method of the docker CLI and then decodes the result.
-//THis call will fail if the underlying inspect fails.
-func (d *dockerCli) DecodeInspect(s ...string) (Inspected, error) {
-	err := d.CmdInspect(s...)
+var EMPTY struct{}
+
+func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, string, error) {
+	config := &docker.Config{}
+	config.Cmd = s
+	config.Image = runconf.Image
+
+	cont, err := d.createNamedContainer(config)
+	if err != nil {
+		return nil, "", err
+	}
+	host := &docker.HostConfig{}
+
+	//flatten links for consumption by go-dockerclient
+	flatLinks := []string{}
+	for k, v := range runconf.Links {
+		flatLinks = append(flatLinks, fmt.Sprintf("%s:%s", k, v))
+	}
+	host.Links = flatLinks
+	host.Binds = []string{}
+	for k, v := range runconf.Volumes {
+		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
+	}
+
+	//convert the types of the elements of this map so that *our* clients don't
+	//see the inner types
+	convertedMap := make(map[docker.Port][]docker.PortBinding)
+	for k, v := range runconf.Ports {
+		key := docker.Port(k)
+		convertedMap[key] = []docker.PortBinding{}
+		for _, m := range v {
+			convertedMap[key] = append(convertedMap[key],
+				docker.PortBinding{HostIp: m.HostIp, HostPort: m.HostPort})
+		}
+	}
+	host.PortBindings = convertedMap
+
+	err = d.client.StartContainer(cont.ID, host)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if runconf.Attach {
+
+		if runconf.WaitOutput {
+			fmt.Fprintf(os.Stderr, "[pickett warning] shouldn't use WaitOutput with Attach, ignoring.\n")
+		}
+
+		//These are the right settings if you want to "watch" the output of the command and wait for
+		//it to terminate
+		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
+			Container:    cont.ID,
+			OutputStream: os.Stdout,
+			ErrorStream:  os.Stderr,
+			Logs:         true,
+			Stdout:       true,
+			Stderr:       true,
+			Stream:       true,
+		})
+
+		if err != nil {
+			return nil, "", err
+		}
+		return nil, cont.ID, nil
+	}
+
+	//wait for result and return a buffer with the output
+	if runconf.WaitOutput {
+		_, err = d.client.WaitContainer(cont.ID)
+		if err != nil {
+			return nil, "", err
+		}
+		out := new(bytes.Buffer)
+		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
+			Container:    cont.ID,
+			OutputStream: out,
+			ErrorStream:  out,
+			Logs:         true,
+			Stdout:       true,
+			Stderr:       true,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+
+		return out, cont.ID, nil
+	}
+
+	//just start it and return with the id
+	return nil, cont.ID, nil
+}
+
+func (d *dockerCli) CmdStop(contID string) error {
+	fmt.Printf("TRYING TO STOP CONTAINER %s\n", contID)
+	return d.client.StopContainer(contID, 10)
+}
+
+func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
+
+	return d.client.TagImage(image, docker.TagImageOptions{
+		Force: force,
+		Tag:   info.Tag,
+		Repo:  info.Repository,
+	})
+}
+
+func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error) {
+	opts := docker.CommitContainerOptions{
+		Container: containerId,
+	}
+	if info != nil {
+		opts.Tag = info.Tag
+		opts.Repository = info.Repository
+	}
+	image, err := d.client.CommitContainer(opts)
+	if err != nil {
+		return "", err
+	}
+	return image.ID, nil
+}
+
+func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) error {
+
+	//build tarball
+	out := new(bytes.Buffer)
+	tw := tar.NewWriter(out)
+	dir, err := os.Open(pathToDir)
+	if err != nil {
+		return err
+	}
+	info, err := dir.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("expected %s to be a directory!", dir)
+	}
+	names, err := dir.Readdirnames(0)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		path := filepath.Join(pathToDir, name)
+		info, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		hdr := &tar.Header{
+			Name: name,
+			Size: info.Size(),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		fp, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		content, err := ioutil.ReadAll(fp)
+		if err != nil {
+			return err
+		}
+		if _, err := tw.Write(content); err != nil {
+			return err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+
+	opts := docker.BuildImageOptions{
+		Name:           tag,
+		InputStream:    bytes.NewBuffer(out.Bytes()),
+		OutputStream:   os.Stdout,
+		RmTmpContainer: config.RemoveTemporaryContainer,
+		SuppressOutput: false,
+		NoCache:        config.NoCache,
+	}
+
+	if err := d.client.BuildImage(opts); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *dockerCli) InspectImage(n string) (InspectedImage, error) {
+	i, err := c.client.InspectImage(n)
 	if err != nil {
 		return nil, err
 	}
-	dec := json.NewDecoder(d.out)
-	result := []interestingPartsOfInspect{}
-	err = dec.Decode(&result)
+	return &imageInspect{
+		wrapped: i,
+	}, nil
+}
+
+func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
+	i, err := c.client.InspectContainer(n)
 	if err != nil {
 		return nil, err
 	}
-	if len(result) != 1 {
-		return nil, BAD_INSPECT_RESULT
-	}
-	return &result[0], nil
-
+	return &contInspect{
+		wrapped: i,
+	}, nil
 }
 
-func (d *dockerCli) CmdInspect(s ...string) error {
-	return d.caller(d.cli.CmdInspect, "inspect", s...)
+//Wrappers for getting inspections
+func (i *imageInspect) CreatedTime() time.Time {
+	return i.wrapped.Created
 }
 
-func (d *dockerCli) CmdBuild(teeOutput bool, s ...string) error {
-	if teeOutput {
-		if d.debug {
-			fmt.Printf("[debug] teeing output to allow build to be seen on stdout, stderr")
-		}
-		d.out.Reset()
-		return d.newDocker(d.out).CmdBuild(s...)
-	}
-	return d.caller(d.cli.CmdBuild, "build", s...)
+func (c *contInspect) CreatedTime() time.Time {
+	return c.wrapped.Created
 }
 
-func (d *dockerCli) Stdout() string {
-	return d.out.String()
+func (c *contInspect) Running() bool {
+	return c.wrapped.State.Running
 }
 
-func (d *dockerCli) EmptyOutput(ignoreComments bool) bool {
-	if !ignoreComments {
-		return d.out.String() == ""
-	}
-	lines := strings.Split(d.out.String(), "\n")
-	for _, l := range lines {
-		if len(l) == 0 {
-			continue
-		}
-		if strings.HasPrefix(l, "#") {
-			continue
-		}
-		return false
-	}
-	return true
+func (c *contInspect) ContainerName() string {
+	return c.wrapped.Name
 }
 
-func (d *dockerCli) DumpErrOutput() {
-	fmt.Printf("--------------------output---------------------- (%d bytes)\n", d.out.Len())
-	fmt.Printf("%s\n", d.out.String())
-	fmt.Printf("------------------------------------------------\n")
-	fmt.Printf("--------------------error-----------------------(%d bytes)\n", d.err.Len())
-	fmt.Printf("%s\n", d.err.String())
-	fmt.Printf("------------------------------------------------\n")
-}
-
-func (d *dockerCli) LastLineOfStdout() string {
-	s := d.out.String()
-	lines := strings.Split(s, "\n")
-	//there is a terminating \n on the last line, need to subtract 2 to get
-	//the last element of this slice
-	if len(lines) < 2 {
-		fmt.Printf("panicing due to bad docker result '%s'\n", s)
-		panic("badly formed lines of output from docker command")
-	}
-	return lines[len(lines)-2]
-}
-
-func (d *dockerCli) Stderr() string {
-	return d.err.String()
-}
-
-func (i *interestingPartsOfInspect) CreatedTime() time.Time {
-	return time.Time(i.Created)
-}
-
-func (i *interestingPartsOfInspect) ContainerName() string {
-	return i.Name
-}
-
-func (i *interestingPartsOfInspect) Running() bool {
-	return i.State.Running
+func (c *contInspect) ExitStatus() int {
+	return c.wrapped.State.ExitCode
 }

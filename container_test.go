@@ -48,20 +48,18 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	helper.EXPECT().LastTimeInDirRelative(MYDIR).Return(thirtyAgo, nil)
 
 	//two fake Inspecteds of the tag "blah/bletch"
-	hourStamp := io.NewMockInspected(controller)
+	hourStamp := io.NewMockInspectedImage(controller)
 	hourStamp.EXPECT().CreatedTime().Return(hourAgo)
 
-	nowStamp := io.NewMockInspected(controller)
+	nowStamp := io.NewMockInspectedImage(controller)
 	nowStamp.EXPECT().CreatedTime().Return(now)
 
 	//hook inspecteds to calls to Inspect in ORDER
-	first := cli.EXPECT().DecodeInspect(BLETCH).Return(hourStamp, nil)
-	cli.EXPECT().DecodeInspect(BLETCH).Return(nowStamp, nil).After(first)
+	first := cli.EXPECT().InspectImage(BLETCH).Return(hourStamp, nil)
+	cli.EXPECT().InspectImage(BLETCH).Return(nowStamp, nil).After(first)
 
 	//get this after the first time check comparing directry time to hourStamp
-	cli.EXPECT().CmdBuild(true, "-foo", "-bar", DIR).Return(nil)
-	cli.EXPECT().LastLineOfStdout().Return(SUCCESS_MAGIC + SOMEID)
-	cli.EXPECT().CmdTag("-f", SOMEID, BLETCH).Return(nil)
+	cli.EXPECT().CmdBuild(gomock.Any(), DIR, BLETCH).Return(nil)
 
 	///
 	//at start, we don't know antyhing about the time

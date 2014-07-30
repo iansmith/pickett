@@ -2,56 +2,46 @@ package pickett
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
-	docker_utils "github.com/docker/docker/utils"
-
 	"github.com/igneous-systems/pickett/io"
-)
-
-const (
-	SUCCESS_MAGIC = "Successfully built "
+	"time"
 )
 
 //containerBuilder represents a node in the dependency graph that understands
 //about how to build a docker image.  This implements the worker interface.
 type containerBuilder struct {
-	tag     string
-	dir     string
-	imgTime time.Time
-	dirTime time.Time
-	inEdges []node
+	repository string
+	tagname    string
+	dir        string
+	imgTime    time.Time
+	dirTime    time.Time
+	inEdges    []node
+}
+
+func (c *containerBuilder) tag() string {
+	return c.repository + ":" + c.tagname
 }
 
 //helper func to look up the timestamp for a given tag in docker. The input
 //can be a tag or an id.
 func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
-	interesting, err := cli.DecodeInspect(tag)
+	interesting, err := cli.InspectImage(tag)
 	if err != nil {
-		statusErr, ok := err.(*docker_utils.StatusError)
-		if !ok {
-			return time.Time{}, err
-		}
-		//XXX is this right?
-		if statusErr.StatusCode == 1 {
-			return time.Time{}, nil
-		}
-		return time.Time{}, err
+		fmt.Printf("xxx is it ok to ignore this error on inspect %s?\n", tag)
+		return time.Time{}, nil
 	}
 	return interesting.CreatedTime(), nil
 }
 
 //setTimestampOnImage sets the timestamp that docker has registered for this image.
 func (d *containerBuilder) setTimestampOnImage(helper io.Helper, cli io.DockerCli) error {
-	t, err := tagToTime(d.tag, cli)
+	t, err := tagToTime(d.tag(), cli)
 	if err != nil {
 		return err
 	}
 	if t.IsZero() {
-		helper.Debug("setTimestampOnImage %s: doesn't exist", d.tag)
+		helper.Debug("setTimestampOnImage %s: doesn't exist", d.tag())
 	} else {
-		helper.Debug("setTimestampOnImage %s to be %v", d.tag, t)
+		helper.Debug("setTimestampOnImage %s to be %v", d.tag(), t)
 	}
 	d.imgTime = t
 	return nil
@@ -83,11 +73,11 @@ func (d *containerBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	if d.dirTime.After(d.imgTime) {
-		fmt.Printf("[pickett] '%s' needs to be rebuilt, source directory %s is newer.\n", d.tag, d.dir)
+		fmt.Printf("[pickett] '%s' needs to be rebuilt, source directory %s is newer.\n", d.tag(), d.dir)
 		return time.Time{}, true, nil
 	}
 
-	fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.tag)
+	fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.tag())
 	return d.imgTime, false, nil
 }
 
@@ -96,21 +86,19 @@ func (d *containerBuilder) ood(conf *Config) (time.Time, bool, error) {
 func (d *containerBuilder) build(config *Config) (time.Time, error) {
 	config.helper.Debug("Building '%s'...", d.tag)
 
-	buildOpts := append(config.DockerBuildOptions, config.helper.DirectoryRelative(d.dir))
-	err := config.cli.CmdBuild(true, buildOpts...)
+	opts := &io.BuildConfig{
+		NoCache:                  config.DockerBuildOptions.DontUseCache,
+		RemoveTemporaryContainer: config.DockerBuildOptions.RemoveContainer,
+	}
+	dirName := config.helper.DirectoryRelative(d.dir)
+	fmt.Printf("[pickett] Building tarball in %s\n", d.dir)
+
+	//now can send it to the server
+	err := config.cli.CmdBuild(opts, dirName, d.tag())
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	last_line := config.cli.LastLineOfStdout()
-	if !strings.HasPrefix(last_line, SUCCESS_MAGIC) {
-		panic("can't understand the success message from docker!")
-	}
-	id := last_line[len(SUCCESS_MAGIC):]
-	err = config.cli.CmdTag("-f", id, d.tag)
-	if err != nil {
-		return time.Time{}, err
-	}
 	//read it back from docker to get the new time
 	d.setTimestampOnImage(config.helper, config.cli)
 	return d.imgTime, nil

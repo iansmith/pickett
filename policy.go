@@ -2,12 +2,9 @@ package pickett
 
 import (
 	"fmt"
+	"github.com/igneous-systems/pickett/io"
 	"path/filepath"
 	"time"
-
-	docker_utils "github.com/docker/docker/utils"
-
-	"github.com/igneous-systems/pickett/io"
 )
 
 // input for a policy to make a decision.  The actual object that could be stopped or started
@@ -60,26 +57,21 @@ func formContainerKey(r runner) string {
 //note that this is the lowest level code that knows about the options to docker and etcd.
 //this code is the actual implementation of start.
 func (p *policyInput) start(teeOutput bool, image string, links map[string]string, cli io.DockerCli, etcd io.EtcdClient) error {
-	args := []string{}
-	if !teeOutput {
-		args = append(args, "-d")
-	} else {
-		args = append(args, "-i", "-t")
+
+	runConfig := &io.RunConfig{
+		Image:      image,
+		Attach:     teeOutput,
+		WaitOutput: false,
+		Links:      links,
+		Ports:      p.r.exposed(),
 	}
-	for k, v := range links {
-		args = append(args, "--link", fmt.Sprintf("%s:%s", k, v))
-	}
-	for k, v := range p.r.exposed() {
-		args = append(args, "-p", fmt.Sprintf("%s:%d:%d", k, v, v))
-	}
-	args = append(append(args, image), p.r.entryPoint()...)
-	err := cli.CmdRun(teeOutput, args...)
+
+	_, contId, err := cli.CmdRun(runConfig, p.r.entryPoint()...)
 	if err != nil {
 		return err
 	}
 	if !teeOutput {
-		id := cli.LastLineOfStdout()
-		insp, err := cli.DecodeInspect(id)
+		insp, err := cli.InspectContainer(contId)
 		if err != nil {
 			return err
 		}
@@ -201,18 +193,18 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 		if p.start == CONTINUE {
 			//this is the nasty case, need to commit the container and then continue
 			//execution from where it was
-			if err := conf.cli.CmdCommit(in.containerName); err != nil {
+			img, err := conf.cli.CmdCommit(in.containerName, nil)
+			if err != nil {
 				return err
 			}
-			img = conf.cli.LastLineOfStdout()
-			conf.helper.Debug("policy %s, continuing %s from image %s", p, in.r.name, img)
+			conf.helper.Debug("policy %s, continuing %s from image %s", p, in.r.name(), img)
 			startIt = true
 		} else if p.start == RESTART {
 			img = in.r.imageName()
-			conf.helper.Debug("policy %s, continuing %s restarting from image %s", p, in.r.name, img)
+			conf.helper.Debug("policy %s,  %s is not running, restarting from image %s", p, in.r.name(), img)
 			startIt = true
 		}
-		if !startIt {
+		if startIt {
 			if err := in.start(teeOutput, img, links, conf.cli, conf.etcd); err != nil {
 				return err
 			}
@@ -220,7 +212,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			conf.helper.Debug("policy %s, not starting %s", p, in.r.name())
 		}
 	} else if teeOutput {
-		fmt.Printf("[pickett] policy %s, ignoring %s which is already running", p, in.r.name)
+		fmt.Printf("[pickett] policy %s, ignoring %s which is already running", p, in.r.name())
 	}
 	return nil
 }
@@ -237,21 +229,21 @@ func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
 		containerName: value,
 		r:             r,
 	}
+	fmt.Printf("create XXXX policy input %+v\n", result)
 	// XXX this logic with the else clauses seems error prone
 	if present {
-		insp, err := conf.cli.DecodeInspect(value)
+		insp, err := conf.cli.InspectContainer(value)
 		if err != nil {
-			status, ok := err.(*docker_utils.StatusError)
-			if ok && status.StatusCode == 1 {
-				conf.helper.Debug("ignoring docker container %s that is AWOL, probably was manually killed...", value)
-				if _, err := conf.etcd.Del(formContainerKey(r)); err != nil {
-					return nil, err
-				}
-				result.isRunning = false
-			} else {
+			fmt.Printf("xxx ok to ignore this error?\n")
+			conf.helper.Debug("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
+			//delete the offending container
+			_, err = conf.etcd.Del(formContainerKey(r))
+			if err != nil {
 				return nil, err
 			}
+			result.isRunning = false
 		} else {
+			//we were able to
 			result.isRunning = insp.Running()
 			result.containerStarted = insp.CreatedTime()
 		}

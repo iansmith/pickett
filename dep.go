@@ -2,6 +2,8 @@ package pickett
 
 import (
 	"time"
+
+	"github.com/igneous-systems/pickett/io"
 )
 
 //namer is something that knows its own name
@@ -19,6 +21,7 @@ type builder interface {
 	ood(*Config) (time.Time, bool, error)
 	build(*Config) (time.Time, error)
 	in() []node
+	tag() string
 }
 
 //runners are things that know how to execute themselves.  They are generally not part of the
@@ -28,11 +31,11 @@ type builder interface {
 type runner interface {
 	namer
 	//this returns a map of the results, as containers
-	run(bool, *Config) (*policyInput, map[string]*policyInput, error)
+	run(bool, *Config) (*policyInput, error)
 
 	//some misc params for the run
 	imageName() string
-	exposed() map[string]int
+	exposed() map[io.Port][]io.PortBinding
 	entryPoint() []string
 
 	//note that this method is not really asking a question of the runner, it's asking a
@@ -41,6 +44,9 @@ type runner interface {
 
 	//again,this is building the image the runner runs in, not the runner itself
 	imageBuild(*Config) error
+
+	//when we are done we need to destroy both our object and the objects we created
+	destroy(*Config) error
 }
 
 //node is the abstraction for an element in the dependency graph of builders.
@@ -61,15 +67,13 @@ type node interface {
 type nodeImpl struct {
 	b       builder
 	out     []node
-	tag     string
 	tagTime time.Time
 }
 
 //newNodeImpl return a new Node that uses a specific builder implementation.
-func newNodeImpl(name string, b builder) node {
+func newNodeImpl(b builder) node {
 	return &nodeImpl{
-		b:   b,
-		tag: name,
+		b: b,
 	}
 }
 
@@ -106,7 +110,7 @@ func (n *nodeImpl) isOutOfDate(conf *Config) (bool, error) {
 //Build delegates to the builder action function if there is any work to do.
 func (n *nodeImpl) build(conf *Config) error {
 	if !n.tagTime.IsZero() {
-		conf.helper.Debug("No work to do for %s", n.name())
+		conf.helper.Debug("No work to do for '%s'.", n.name())
 		return nil
 	}
 
@@ -140,7 +144,7 @@ func (n *nodeImpl) time() time.Time {
 
 //name returns the name of this node, typically it's tag.
 func (n *nodeImpl) name() string {
-	return n.tag
+	return n.b.tag()
 }
 
 //isSink is true if this node has no outbound edges.
