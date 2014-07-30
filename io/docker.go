@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	docker "github.com/dotcloud/docker/api/client"
+	docker "github.com/docker/docker/api/client"
 )
 
 //interestingPartsOfInspect is a utility for pulling things out of the json

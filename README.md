@@ -9,24 +9,52 @@ Assuming you have a modern version of go already installed:
 export GOPATH=$HOME/go
 mkdir -p $GOPATH/src
 export PATH=$PATH:$GOPATH/bin
-# Get and run godep over pickett sources
-go get github.com/tools/godep
-godep get github.com/igneous-systems/pickett/pickett
+
 # Install pickett
+go get github.com/tools/godep
+mkdir -p $GOPATH/src/github.com/igneous-systems
+cd $GOPATH/src/github.com/igneous-systems
+git clone https://github.com/igneous-systems/pickett # can be replaced by your repo
+cd pickett
+# optional: you can checkout a branch here
+# git checkout master
+cd pickett
+godep restore
 go install github.com/igneous-systems/pickett/pickett
 ```
-The next to last one may take a while to pull down all the dependencies.
 
 You should end up with the executable `pickett` in `/tmp/foo/bin`.
+
+The reason we use git clone instead of godep get to grab the source of pickett here is
+to enable a fork-based workflow.  There are internal references to packages in the
+github.com/igneous-systems/pickett namespace, which means that any forks of pickett still
+have to live in $GOPATH/src/github.com/igneous-systems.
+
+### How to run the VM ###
+
+Pickett assumes that you are running a VM with an appropriate version of docker, with
+/vagrant mounted to your host system's home directory
+
+```
+# Start the VM
+cd $GOPATH/src/github.com/igneous-systems/pickett
+vagrant up
+vagrant ssh
+sudo docker -d -H "tcp://0.0.0.0:2375" &
+exit
+```
 
 ### How to get a sample project
 
 Assuming you did the above:
 
 ```
-cd /tmp/foo
-git clone git@github.com:igneous-systems/pickett-samples
-cd pickett-samples/sample1
+# Test that pickett works
+cd $GOPATH/src/github.com/igneous-systems
+git clone https://github.com/igneous-systems/pickett-samples
+export DOCKER_HOST="tcp://localhost:2375"
+cd $GOPATH/src/github.com/igneous-systems/pickett-samples/sample1
+pickett weather-client
 ```
 
 The file to examine is the `Pickett.json`.

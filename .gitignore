@@ -1,0 +1,8 @@
+# emacs
+*~
+
+# vagrant
+.vagrant/*
+
+# go
+Godeps

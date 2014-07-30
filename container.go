@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	docker_utils "github.com/dotcloud/docker/utils"
+	docker_utils "github.com/docker/docker/utils"
 
 	"github.com/igneous-systems/pickett/io"
 )
