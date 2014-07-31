@@ -41,6 +41,7 @@ cd $GOPATH/src/github.com/igneous-systems/pickett
 vagrant up
 vagrant ssh
 sudo docker -d -H "tcp://0.0.0.0:2375" &
+sudo start etcd
 exit
 ```
 
