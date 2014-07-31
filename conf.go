@@ -135,7 +135,7 @@ func (c *Config) EntryPoints() ([]string, []string) {
 	return r1, r2
 }
 
-// Build is alled by the "main()" of the pickett program to build a "target".
+// Build is called by the "main()" of the pickett program to build a "target".
 func (c *Config) Build(name string) error {
 	node, isPresent := c.nameToNode[strings.Trim(name, " \n")]
 	if !isPresent {
@@ -152,7 +152,7 @@ func (c *Config) Build(name string) error {
 	return node.build(c)
 }
 
-// Execute is alled by the "main()" of the pickett program to run a "target".
+// Execute is called by the "main()" of the pickett program to run a "target".
 func (c *Config) Execute(name string) error {
 	net, isPresent := c.nameToNetwork[strings.Trim(name, " \n")]
 	if !isPresent {
