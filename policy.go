@@ -162,7 +162,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			return nil
 		}
 		if p.rebuildIfOOD && ood {
-			conf.helper.Debug("policy %s, rebuilding out of date image for '%s'", in.r.name())
+			conf.helper.Debug("policy %s, rebuilding out of date image for '%s'", p, in.r.name())
 			if err := in.r.imageBuild(conf); err != nil {
 				return err
 			}
