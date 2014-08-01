@@ -2,6 +2,8 @@ package pickett
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -59,16 +61,24 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 	//initialize with the value from the config file
 	curr := e.runIn.name
 	for k, v := range e.artifacts {
+		isDir := false
+		from := filepath.Join(path, k)
+		info, err := os.Stat(from)
+		if err != nil && info.IsDir() {
+			isDir = true
+		}
 		runCmd := []string{
 			"-v",
 			fmt.Sprintf("%s:%s", path, conf.CodeVolume.MountedAt),
 			fmt.Sprintf("%s", curr),
 			"cp",
-			fmt.Sprintf("%s", k),
-			fmt.Sprintf("%s", v),
 		}
+		if isDir { // If artifact is a directory, recursively copy it
+			runCmd = append(runCmd, "-rf")
+		}
+		runCmd = append(runCmd, fmt.Sprintf("%s", k), fmt.Sprintf("%s", v))
 		conf.helper.Debug("copying artifact with cp: %s -> %s", k, v)
-		err := conf.cli.CmdRun(false, runCmd...)
+		err = conf.cli.CmdRun(false, runCmd...)
 		if err != nil {
 			return time.Time{}, err
 		}
