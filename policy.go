@@ -173,14 +173,14 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
-		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name)
+		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
 		in.isRunning = false
 	} else if in.isRunning && p.stop == ALWAYS {
-		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name)
+		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
@@ -205,11 +205,11 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 				return err
 			}
 			img = conf.cli.LastLineOfStdout()
-			conf.helper.Debug("policy %s, continuing %s from image %s", p, in.r.name, img)
+			conf.helper.Debug("policy %s, continuing %s from image %s", p, in.r.name(), img)
 			startIt = true
 		} else if p.start == RESTART {
 			img = in.r.imageName()
-			conf.helper.Debug("policy %s, continuing %s restarting from image %s", p, in.r.name, img)
+			conf.helper.Debug("policy %s, continuing %s restarting from image %s", p, in.r.name(), img)
 			startIt = true
 		}
 		if !startIt {
@@ -220,7 +220,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			conf.helper.Debug("policy %s, not starting %s", p, in.r.name())
 		}
 	} else if teeOutput {
-		fmt.Printf("[pickett] policy %s, ignoring %s which is already running", p, in.r.name)
+		fmt.Printf("[pickett] policy %s, ignoring %s which is already running", p, in.r.name())
 	}
 	return nil
 }
