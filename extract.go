@@ -2,6 +2,7 @@ package pickett
 
 import (
 	"fmt"
+	"github.com/igneous-systems/pickett/io"
 	"time"
 )
 
@@ -10,33 +11,37 @@ import (
 // node or image.  typically, they are used to get build artifacts out of a conatiner
 // that has the build tools.
 type extractionBuilder struct {
-	tag       string
-	runIn     nodeOrName
-	mergeWith nodeOrName
-	artifacts map[string]string
+	repository string
+	tagname    string
+	runIn      nodeOrName
+	mergeWith  nodeOrName
+	artifacts  []*Artifact
+}
+
+func (e *extractionBuilder) tag() string {
+	return e.repository + ":" + e.tagname
 }
 
 // IsOutOfDate returns true if the tag that we are trying to produce is
 // before the tag of the image we depend on.
 func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
-	t, err := tagToTime(e.tag, conf.cli)
+	t, err := tagToTime(e.tag(), conf.cli)
 	if err != nil {
 		return time.Time{}, true, err
 	}
 	if t.IsZero() {
-		fmt.Printf("[pickett] Building %s (tag not found)\n", e.tag)
+		fmt.Printf("[pickett] Building %s (tag not found)\n", e.tag())
 		return time.Time{}, true, nil
 	}
 	if e.runIn.isNode && t.Before(e.runIn.node.time()) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag, e.runIn.name)
+		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag(), e.runIn.name)
 		return time.Time{}, true, nil
 	}
 	if e.mergeWith.isNode && t.Before(e.mergeWith.node.time()) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag, e.runIn.name)
+		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag(), e.runIn.name)
 		return time.Time{}, true, nil
 	}
-
-	fmt.Printf("[pickett] '%s' is up to date\n", e.tag)
+	fmt.Printf("[pickett] '%s' is up to date\n", e.tag())
 	return t, false, nil
 }
 
@@ -55,42 +60,50 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 			return time.Time{}, err
 		}
 	}
-
 	//initialize with the value from the config file
-	curr := e.runIn.name
-	for k, v := range e.artifacts {
-		runCmd := []string{
-			"-v",
-			fmt.Sprintf("%s:%s", path, conf.CodeVolume.MountedAt),
-			fmt.Sprintf("%s", curr),
-			"cp",
-			fmt.Sprintf("%s", k),
-			fmt.Sprintf("%s", v),
+	curr := e.mergeWith.name
+	volumes := make(map[string]string)
+	volumes[path] = conf.CodeVolume.MountedAt
+
+	for _, a := range e.artifacts {
+		runConfig := &io.RunConfig{
+			Volumes:    volumes,
+			Image:      curr,
+			Attach:     false,
+			WaitOutput: true,
 		}
-		conf.helper.Debug("copying artifact with cp: %s -> %s", k, v)
-		err := conf.cli.CmdRun(false, runCmd...)
+		runCmd := []string{"cp"}
+		if a.IsDirectory { // If artifact is a directory, recursively copy it
+			runCmd = []string{"cp", "-rf"}
+		}
+		runCmd = append(runCmd, a.BuiltPath, a.DestinationPath)
+		conf.helper.Debug("copying artifact with cp: %s -> %s.", a.BuiltPath, a.DestinationPath)
+		buf, id, err := conf.cli.CmdRun(runConfig, runCmd...)
 		if err != nil {
 			return time.Time{}, err
 		}
-		err = conf.cli.CmdPs("-q", "-l")
+		insp, err := conf.cli.InspectContainer(id)
 		if err != nil {
 			return time.Time{}, err
 		}
-		err = conf.cli.CmdCommit(conf.cli.LastLineOfStdout())
+		if insp.ExitStatus() != 0 {
+			return time.Time{}, fmt.Errorf("%s", buf.String())
+		}
+
+		curr, err = conf.cli.CmdCommit(id, nil)
 		if err != nil {
 			return time.Time{}, err
 		}
-		curr = conf.cli.LastLineOfStdout()
 	}
-	err = conf.cli.CmdTag(curr, e.tag)
+	err = conf.cli.CmdTag(curr, true, &io.TagInfo{Repository: e.repository, Tag: e.tagname})
 	if err != nil {
 		return time.Time{}, err
 	}
-	insp, err := conf.cli.DecodeInspect(e.tag)
+	insp, err := conf.cli.InspectImage(e.tag())
 	if err != nil {
 		return time.Time{}, err
 	}
-	conf.helper.Debug("done copying, time for %s is %v", e.tag, insp.CreatedTime())
+	conf.helper.Debug("done copying, time for %s is %v", e.tag(), insp.CreatedTime())
 	return insp.CreatedTime(), nil
 }
 

@@ -37,18 +37,18 @@ func (c *Config) checkContainerNodes(helper pickett_io.Helper, cli pickett_io.Do
 		if err := c.checkExistingName(img.Tag, true); err != nil {
 			return err
 		}
-		node := newNodeImpl(img.Tag, w)
-		c.nameToNode[img.Tag] = node
+		node := newNodeImpl(w)
+		c.nameToNode[w.tag()] = node
 	}
 	//make a pass adding edges
 	for _, img := range c.Containers {
-		dest := c.nameToNode[img.Tag]
+		dest := c.nameToNode[img.Repository+":"+img.Tag]
 		work := dest.implementation().(*containerBuilder)
 		for _, source := range img.DependsOn {
 			node_source, ok := c.nameToNode[source]
 			if !ok {
 				return fmt.Errorf("image %s depends on %s, but %s not found",
-					img.Tag, source, source)
+					img.Repository+":"+img.Tag, source, source)
 			}
 			node_source.addOut(dest)
 			work.inEdges = append(work.inEdges, node_source)
@@ -77,9 +77,9 @@ func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) erro
 
 		//add edges
 		w.runIn = r
-		node := newNodeImpl(build.Tag, w)
+		node := newNodeImpl(w)
 		r.addOut(node)
-		c.nameToNode[build.Tag] = node
+		c.nameToNode[w.tag()] = node
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func (c *Config) tagExists(tag string, cli pickett_io.DockerCli) bool {
 	if ok {
 		return true
 	}
-	_, err := cli.DecodeInspect(strings.Trim(tag, " \n"))
+	_, err := cli.InspectImage(strings.Trim(tag, " \n"))
 	return err == nil
 }
 
@@ -105,7 +105,7 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 		if err != nil {
 			return err
 		}
-		if err := c.checkExistingName(build.Tag, true); err != nil {
+		if err := c.checkExistingName(w.tag(), true); err != nil {
 			return err
 		}
 		if !c.tagExists(build.RunIn, cli) {
@@ -120,7 +120,6 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 			in.node = r
 		}
 		w.runIn = in
-
 		if !c.tagExists(build.MergeWith, cli) {
 			return fmt.Errorf("Unable to find '%s' (MergeWith) trying to setup for artifact '%s': maybe you need to 'docker pull' it?",
 				build.MergeWith, build.Tag)
@@ -132,6 +131,8 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 			merge.isNode = true
 			merge.node = m
 		}
+		w.mergeWith = merge
+
 		//
 		// handle dependency edges
 		//
@@ -140,14 +141,14 @@ func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.D
 			return fmt.Errorf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
 				build.Tag, r.name())
 		}
-		node := newNodeImpl(build.Tag, w)
+		node := newNodeImpl(w)
 		if w.runIn.isNode {
 			r.addOut(node)
 		}
 		if w.mergeWith.isNode {
 			m.addOut(node)
 		}
-		c.nameToNode[strings.Trim(build.Tag, " \n")] = node
+		c.nameToNode[w.tag()] = node
 	}
 	return nil
 }
@@ -198,7 +199,7 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 			//leave a breadcrump
 			commiters[i] = p
 			//put in list of nodes
-			c.nameToNode[result] = newNodeImpl(result, p)
+			c.nameToNode[result] = newNodeImpl(p)
 		}
 	}
 
@@ -231,9 +232,24 @@ func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCl
 //newNetworkRunner creates a new networkRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
+	exp := make(map[pickett_io.Port][]pickett_io.PortBinding)
+
+	//convert to the pickett_io format
+	for k, v := range n.Expose {
+		key := pickett_io.Port(k)
+		curr, ok := exp[key]
+		if !ok {
+			curr = []pickett_io.PortBinding{}
+		}
+		var b pickett_io.PortBinding
+		b.HostIp = "127.0.0.1"
+		b.HostPort = fmt.Sprintf("%d", v)
+		exp[key] = append(curr, b)
+	}
+
 	result := &networkRunner{
 		n:      n.Name,
-		expose: n.Expose,
+		expose: exp,
 	}
 	pol := defaultPolicy()
 	switch strings.ToUpper(n.Policy) {
@@ -268,8 +284,9 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 // of edges.
 func (c *Config) newContainerBuilder(src *Container, helper pickett_io.Helper) (*containerBuilder, error) {
 	node := &containerBuilder{
-		tag: src.Tag,
-		dir: src.Directory,
+		tagname:    strings.Trim(src.Tag, "\n "),
+		dir:        strings.Trim(src.Directory, "\n "),
+		repository: strings.Trim(src.Repository, "\n "),
 	}
 	_, err := helper.OpenDockerfileRelative(src.Directory)
 	if err != nil {
@@ -283,8 +300,12 @@ func (c *Config) newContainerBuilder(src *Container, helper pickett_io.Helper) (
 // provided in the pickett file. This sanity checks the config file, so it can
 // fail.  It ignores dependency edges.
 func (c *Config) newGoBuilder(build *GoBuild) (*goBuilder, error) {
+	if build.Repository == "" || build.Tag == "" {
+		return nil, fmt.Errorf("repository and tag are required for a go build")
+	}
 	result := &goBuilder{
-		tag: build.Tag,
+		tagname:    strings.Trim(build.Tag, "\n "),
+		repository: strings.Trim(build.Repository, "\n "),
 	}
 	if len(build.Packages) == 0 {
 		return nil, fmt.Errorf("you must define at least one source package for a go build")
@@ -313,17 +334,10 @@ func (c *Config) newExtractionBuilder(build *Extraction) (*extractionBuilder, er
 	if len(build.Artifacts) == 0 {
 		return nil, fmt.Errorf("%s must define at least one artifact", build.Tag)
 	}
-	art := make(map[string]string)
-	for k, v := range build.Artifacts {
-		s, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("%v must be a string (in artifacts of %s)!", v, build.Tag)
-		}
-		art[k] = s
-	}
 	worker := &extractionBuilder{
-		artifacts: art,
-		tag:       build.Tag,
+		artifacts:  build.Artifacts,
+		tagname:    strings.Trim(build.Tag, "\n "),
+		repository: strings.Trim(build.Repository, "\n "),
 	}
 	return worker, nil
 }

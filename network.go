@@ -3,6 +3,8 @@ package pickett
 import (
 	"fmt"
 	"time"
+
+	"github.com/igneous-systems/pickett/io"
 )
 
 //nodeOrName represents a labelled entity. It can be either a tag that must be in the local
@@ -16,19 +18,20 @@ type nodeOrName struct {
 //network is a DAG of nodes that also are runnable.  Note that network node may be called
 //to build() which has the effect of only preparing it's dependencies.
 type networkRunner struct {
-	n        string
-	runIn    nodeOrName
-	entry    []string
-	consumes []runner
-	policy   policy
-	expose   map[string]int
+	n             string
+	runIn         nodeOrName
+	entry         []string
+	consumes      []runner
+	policy        policy
+	expose        map[io.Port][]io.PortBinding
+	containerName string
 }
 
 func (n *networkRunner) name() string {
 	return n.n
 }
 
-func (n *networkRunner) exposed() map[string]int {
+func (n *networkRunner) exposed() map[io.Port][]io.PortBinding {
 	return n.expose
 }
 
@@ -53,28 +56,24 @@ func (n *networkRunner) imageName() string {
 // run actually does the work to launch this network ,including launching all the networks
 // that this one depends on (consumes).  Note that behavior of starting or stopping
 // particular dependent services is controllled through the policy apparatus.
-func (n *networkRunner) run(teeOutput bool, conf *Config) (*policyInput, map[string]*policyInput, error) {
+func (n *networkRunner) run(teeOutput bool, conf *Config) (*policyInput, error) {
 	links := make(map[string]string)
-	var results map[string]*policyInput
-	if len(n.consumes) > 0 {
-		results = make(map[string]*policyInput)
-	}
+
 	for _, r := range n.consumes {
 		conf.helper.Debug("launching %s because %s consumes it", r.name(), n.name())
-		input, deps, err := r.run(false, conf)
+		input, err := r.run(false, conf)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		links[input.containerName] = input.r.name()
-		results[r.name()] = input
-		fmt.Printf("deps in run...discarded? %+v\n", deps)
 	}
 
 	in, err := createPolicyInput(n, conf)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return in, results, n.policy.appyPolicy(teeOutput, in, links, conf)
+	n.containerName = in.containerName //for use in destroy
+	return in, n.policy.appyPolicy(teeOutput, in, links, conf)
 }
 
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
@@ -116,11 +115,11 @@ func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	in, deps, err := o.net.run(true, conf)
+	in, err := o.net.run(true, conf)
 	if err != nil {
 		return time.Time{}, err
 	}
-	fmt.Printf("should be doing the commit magic here...tear down and commit: %v, discard in? %v\n", deps, in)
+	fmt.Printf("should be doing the commit magic here...tear down and commit: %+v\n", in)
 	return time.Time{}, err
 }
 
@@ -130,4 +129,22 @@ func (o *outcomeProxyBuilder) in() []node {
 		return append(result, o.net.runIn.node)
 	}
 	return result
+}
+
+func (o *outcomeProxyBuilder) tag() string {
+	return o.imageResult
+}
+
+func (n *networkRunner) destroy(config *Config) error {
+	//note that this condition ends up false in the case where we BLOCKED on the outcome of the container
+	//thus we never needed to store it's container name in etcd
+	if n.containerName != "" {
+		if _, err := config.etcd.Del(formContainerKey(n)); err != nil {
+			return err
+		}
+		if err := config.cli.CmdStop(n.containerName); err != nil {
+			return err
+		}
+	}
+	return nil
 }

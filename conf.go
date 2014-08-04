@@ -12,9 +12,10 @@ import (
 )
 
 type Container struct {
-	Tag       string
-	Directory string
-	DependsOn []string
+	Repository string
+	Tag        string
+	Directory  string
+	DependsOn  []string
 }
 
 type CodeVolume struct {
@@ -23,12 +24,13 @@ type CodeVolume struct {
 }
 
 type GoBuild struct {
-	Command  string
-	RunIn    string
-	Tag      string
-	Packages []string
-	TestFile string
-	Probe    string
+	Command    string
+	RunIn      string
+	Repository string
+	Tag        string
+	Packages   []string
+	TestFile   string
+	Probe      string
 }
 
 type GenericBuild struct {
@@ -37,11 +39,18 @@ type GenericBuild struct {
 	Run   []string
 }
 
+type Artifact struct {
+	BuiltPath       string
+	IsDirectory     bool
+	DestinationPath string
+}
+
 type Extraction struct {
-	RunIn     string
-	MergeWith string
-	Tag       string
-	Artifacts map[string]interface{}
+	Repository string
+	RunIn      string
+	MergeWith  string
+	Tag        string
+	Artifacts  []*Artifact
 }
 
 type Network struct {
@@ -54,8 +63,13 @@ type Network struct {
 	CommitOnExit map[string]string
 }
 
+type BuildOpts struct {
+	DontUseCache    bool
+	RemoveContainer bool
+}
+
 type Config struct {
-	DockerBuildOptions []string
+	DockerBuildOptions BuildOpts
 	CodeVolume         CodeVolume
 	Containers         []*Container
 	GoBuilds           []*GoBuild
@@ -158,7 +172,10 @@ func (c *Config) Execute(name string) error {
 	if !isPresent {
 		return fmt.Errorf("no such target for build or run: %s", name)
 	}
-	rez, deps, err := net.run(true, c)
-	fmt.Printf("execute finished : %+v, %+v\n", rez, deps)
-	return err
+	_, err := net.run(true, c)
+	if err != nil {
+		fmt.Printf("[pickett] error in %s, not destroying network...\n", name)
+		return err
+	}
+	return net.destroy(c)
 }
