@@ -2,9 +2,10 @@ package pickett
 
 import (
 	"fmt"
-	"github.com/igneous-systems/pickett/io"
 	"path/filepath"
 	"time"
+
+	"github.com/igneous-systems/pickett/io"
 )
 
 // input for a policy to make a decision.  The actual object that could be stopped or started
@@ -165,14 +166,14 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
-		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name)
+		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
 		in.isRunning = false
 	} else if in.isRunning && p.stop == ALWAYS {
-		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name)
+		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
