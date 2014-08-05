@@ -84,7 +84,6 @@ func (d *containerBuilder) ood(conf *Config) (time.Time, bool, error) {
 //build constructs a new image based on a directory that has a dockerfile. It
 //calls the docker server to actually perform the build.
 func (d *containerBuilder) build(config *Config) (time.Time, error) {
-	config.helper.Debug("Building '%s'...", d.tag)
 
 	opts := &io.BuildConfig{
 		NoCache:                  config.DockerBuildOptions.DontUseCache,
