@@ -179,3 +179,22 @@ func (c *Config) Execute(name string) error {
 	}
 	return net.destroy(c)
 }
+
+func (c *Config) codeVolumes() (map[string]string, error) {
+
+	results := make(map[string]string)
+
+	for _, v := range c.CodeVolumes {
+		dir := c.helper.DirectoryRelative(v.Directory)
+		path := dir
+		var err error
+		if c.vbox.NeedPathTranslation() {
+			path, err = c.vbox.CodeVolumeToVboxPath(dir)
+			if err != nil {
+				return nil, err
+			}
+		}
+		results[path] = v.MountedAt
+	}
+	return results, nil
+}

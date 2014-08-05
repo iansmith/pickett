@@ -51,19 +51,11 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 	if len(conf.CodeVolumes) == 0 {
 		return time.Time{}, fmt.Errorf("not clever enough to copy artifacts that are not on a code volume!")
 	}
-	dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
-	path := dir
-	var err error
-	if conf.vbox.NeedPathTranslation() {
-		path, err = conf.vbox.CodeVolumeToVboxPath(dir)
-		if err != nil {
-			return time.Time{}, err
-		}
+	volumes, err := conf.codeVolumes()
+	if err != nil {
+		return time.Time{}, err
 	}
-	//initialize with the value from the config file
 	curr := e.mergeWith.name
-	volumes := make(map[string]string)
-	volumes[path] = conf.CodeVolume.MountedAt
 
 	for _, a := range e.artifacts {
 		runConfig := &io.RunConfig{
