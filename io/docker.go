@@ -288,8 +288,10 @@ func (d *dockerCli) tarball(pathToDir string, localName string, out *bytes.Buffe
 			continue
 		}
 		hdr := &tar.Header{
-			Name: filepath.Join(localName, name),
-			Size: info.Size(),
+			Name:    filepath.Join(localName, name),
+			Size:    info.Size(),
+			Mode:    int64(info.Mode()),
+			ModTime: info.ModTime(),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
