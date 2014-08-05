@@ -255,11 +255,10 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 	return image.ID, nil
 }
 
-func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) error {
-
-	//build tarball
-	out := new(bytes.Buffer)
-	tw := tar.NewWriter(out)
+func (d *dockerCli) tarball(pathToDir string, localName string, out *bytes.Buffer, tw *tar.Writer) error {
+	if d.debug {
+		fmt.Printf("[debug] tarball construction in '%s' (as '%s')\n", pathToDir, localName)
+	}
 	dir, err := os.Open(pathToDir)
 	if err != nil {
 		return err
@@ -281,8 +280,15 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			err := d.tarball(path, filepath.Join(localName, name), out, tw)
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		hdr := &tar.Header{
-			Name: name,
+			Name: filepath.Join(localName, name),
 			Size: info.Size(),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
@@ -303,7 +309,18 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 	if err := tw.Close(); err != nil {
 		return err
 	}
+	return nil
+}
 
+func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) error {
+
+	//build tarball
+	out := new(bytes.Buffer)
+	tw := tar.NewWriter(out)
+	err := d.tarball(pathToDir, "", out, tw)
+	if err != nil {
+		return err
+	}
 	opts := docker.BuildImageOptions{
 		Name:           tag,
 		InputStream:    bytes.NewBuffer(out.Bytes()),
