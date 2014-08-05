@@ -16,11 +16,13 @@ var example1 = `
 	},
 
 	// a comment
-	"CodeVolume" : {
-		"Directory" : "src", //will expand to /home/gredo/src
-		"MountedAt" : "/han",  // stray comma?,
-		"SomeExtra" : "cruft"
-	},
+	"CodeVolume" : [
+		{
+			"Directory" : "src", //will expand to /home/gredo/src
+			"MountedAt" : "/han",  // stray comma?,
+			"SomeExtra" : "cruft"
+		}
+	],
 	"Containers" : [
 		{
 			"Tag" : "blah/bletch",
@@ -70,7 +72,7 @@ func TestConf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}
-	if c.CodeVolume.Directory != "src" {
+	if c.CodeVolumes[0].Directory != "src" {
 		t.Errorf("failed to parse CodeVolume>Directory")
 	}
 }

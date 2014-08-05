@@ -48,7 +48,7 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 //build does the work of coping data from the source image (runIn) and then
 //adding it to the merge image (mergeWith)
 func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
-	if conf.CodeVolume.MountedAt == "" {
+	if len(conf.CodeVolumes) == 0 {
 		return time.Time{}, fmt.Errorf("not clever enough to copy artifacts that are not on a code volume!")
 	}
 	dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)

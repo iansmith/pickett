@@ -70,7 +70,7 @@ type BuildOpts struct {
 
 type Config struct {
 	DockerBuildOptions BuildOpts
-	CodeVolume         CodeVolume
+	CodeVolumes        []*CodeVolume
 	Containers         []*Container
 	GoBuilds           []*GoBuild
 	Extractions        []*Extraction
