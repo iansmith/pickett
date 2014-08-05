@@ -16,30 +16,31 @@ var example1 = `
 	},
 
 	// a comment
-	"CodeVolume" : [
+	"CodeVolumes" : [
 		{
 			"Directory" : "src", //will expand to /home/gredo/src
 			"MountedAt" : "/han",  // stray comma?,
-			"SomeExtra" : "cruft"
+			"SomeExtra" : "cruft"  
 		}
 	],
 	"Containers" : [
 		{
-			"Tag" : "blah/bletch",
+			"Repository": "blah",
+			"Tag" : "bletch",
 			"Directory" : "mydir"
 		}
 	],
 	"GoBuilds" : [
 		{
 			"Repository": "test",
-			"RunIn" : "blah/bletch",
+			"RunIn" : "blah:bletch",
 			"Packages": ["p1...", "p2/p3" ],
 			"Command" : "go test",
 			"Tag": "nashville"
 		},
 		{
 			"Repository": "fart",
-			"RunIn" : "blah/bletch",
+			"RunIn" : "blah:bletch",
 			"Packages": ["p4...", "p5/p6" ],
 			"Tag": "chattanooga"
 		}
