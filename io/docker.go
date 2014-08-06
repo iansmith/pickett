@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -47,11 +48,20 @@ type BuildConfig struct {
 	RemoveTemporaryContainer bool
 }
 
+type CopyArtifact struct {
+	SourcePath, DestinationDir string
+}
+
 type DockerCli interface {
 	CmdRun(*RunConfig, ...string) (*bytes.Buffer, string, error)
 	CmdTag(string, bool, *TagInfo) error
 	CmdCommit(string, *TagInfo) (string, error)
 	CmdBuild(*BuildConfig, string, string) error
+	//Copy actually does two different things: copies artifacts from the source tree into a tarball
+	//or copies artifacts from a container (given here as an image) into a tarball.  In both cases
+	//the resulting tarball is sent to the docker server for a build.
+	CmdCopy(map[string]string, string, string, []*CopyArtifact, string) error
+	CmdLastModTime(map[string]string, string, []*CopyArtifact) (time.Time, error)
 	CmdStop(string) error
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
@@ -255,7 +265,7 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 	return image.ID, nil
 }
 
-func (d *dockerCli) tarball(pathToDir string, localName string, out *bytes.Buffer, tw *tar.Writer) error {
+func (d *dockerCli) tarball(pathToDir string, localName string, tw *tar.Writer) error {
 	if d.debug {
 		fmt.Printf("[debug] tarball construction in '%s' (as '%s')\n", pathToDir, localName)
 	}
@@ -276,41 +286,239 @@ func (d *dockerCli) tarball(pathToDir string, localName string, out *bytes.Buffe
 	}
 	for _, name := range names {
 		path := filepath.Join(pathToDir, name)
-		info, err := os.Stat(path)
+		lname := filepath.Join(localName, name)
+		isFile, err := d.writeFullFile(tw, path, lname)
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			err := d.tarball(path, filepath.Join(localName, name), out, tw)
+		if !isFile {
+			err := d.tarball(path, filepath.Join(localName, name), tw)
 			if err != nil {
 				return err
 			}
 			continue
 		}
-		hdr := &tar.Header{
-			Name:    filepath.Join(localName, name),
-			Size:    info.Size(),
-			Mode:    int64(info.Mode()),
-			ModTime: info.ModTime(),
+	}
+	return nil
+}
+
+func (d *dockerCli) writeFullFile(tw *tar.Writer, path string, localName string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if info.IsDir() {
+		return false, nil
+	}
+
+	//now we are sure it's a file
+	hdr := &tar.Header{
+		Name:    localName,
+		Size:    info.Size(),
+		Mode:    int64(info.Mode()),
+		ModTime: info.ModTime(),
+	}
+
+	if err := tw.WriteHeader(hdr); err != nil {
+		return false, err
+	}
+	fp, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	content, err := ioutil.ReadAll(fp)
+	if err != nil {
+		return false, err
+	}
+	if _, err := tw.Write(content); err != nil {
+		return false, err
+	}
+	if d.debug {
+		fmt.Printf("[debug] added %s as %s to tarball\n", path, localName)
+	}
+	return true, nil
+}
+
+//XXX is it safe to use /bin/true?
+func (d *dockerCli) makeDummyContainerToGetAtImage(img string) (string, error) {
+	cont, err := d.client.CreateContainer(docker.CreateContainerOptions{
+		Config: &docker.Config{
+			Image:      img,
+			Entrypoint: []string{"/bin/true"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return cont.ID, nil
+}
+
+func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
+	artifacts []*CopyArtifact) (time.Time, error) {
+	if len(realPathSource) == len(artifacts) {
+		if d.debug {
+			fmt.Printf("[debug] no work to do in the container for last mod time, no artifacts inside it.\n")
+			return time.Time{}, nil
 		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
+	}
+	cont, err := d.makeDummyContainerToGetAtImage(img)
+	if err != nil {
+		return time.Time{}, err
+	}
+	err = d.client.StartContainer(cont, &docker.HostConfig{})
+	if err != nil {
+		return time.Time{}, err
+	}
+	//walk each artifact, getting it from the container, skipping sources
+	best := time.Time{}
+	for _, a := range artifacts {
+		_, found := realPathSource[a.SourcePath]
+		if found {
+			continue
 		}
-		fp, err := os.Open(path)
+		//pull it from container
+		buf := new(bytes.Buffer)
+		err = d.client.CopyFromContainer(docker.CopyFromContainerOptions{
+			OutputStream: buf,
+			Container:    cont,
+			Resource:     a.SourcePath,
+		})
+		if err != nil {
+			return time.Time{}, err
+		}
+		//var out bytes.Buffer
+		r := bytes.NewReader(buf.Bytes())
+		tr := tar.NewReader(r)
+		for {
+			entry, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return time.Time{}, err
+			}
+			if d.debug {
+				fmt.Printf("[debug] read file from container: %s, %v\n", entry.Name, entry.ModTime)
+			}
+			if !entry.FileInfo().IsDir() {
+				if entry.ModTime.After(best) {
+					best = entry.ModTime
+				}
+			}
+		}
+	}
+	return best, nil
+}
+
+func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, imgDest string,
+	artifacts []*CopyArtifact, resultTag string) error {
+	cont, err := d.makeDummyContainerToGetAtImage(imgSrc)
+	if err != nil {
+		return err
+	}
+
+	if len(realPathSource) != len(artifacts) {
+		if d.debug {
+			fmt.Printf("[debug] starting container because we need to retrieve artifacts from it\n")
+		}
+		//don't bother starting the container untless there is something we need from it
+		err = d.client.StartContainer(cont, &docker.HostConfig{})
 		if err != nil {
 			return err
 		}
-		content, err := ioutil.ReadAll(fp)
-		if err != nil {
-			return err
+	} else {
+		if d.debug {
+			fmt.Printf("[debug] all artifacts found in source tree, not starting container\n")
 		}
-		if _, err := tw.Write(content); err != nil {
-			return err
+	}
+
+	dockerFile := new(bytes.Buffer)
+	resulTarball := new(bytes.Buffer)
+	tw := tar.NewWriter(resulTarball)
+
+	dockerFile.WriteString(fmt.Sprintf("FROM %s\n", imgDest))
+
+	//walk each artifact, potentially getting it from the container
+	for _, a := range artifacts {
+		truePath, found := realPathSource[a.SourcePath]
+		if found {
+			isFile, err := d.writeFullFile(tw, truePath, a.SourcePath)
+			if err != nil {
+				return err
+			}
+			//kinda hacky: we use a.SourcePath as the name *inside* the tarball so we can get the
+			//directory name right on the final output
+			dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
+			if !isFile {
+				if err := d.tarball(truePath, a.SourcePath, tw); err != nil {
+					return err
+				}
+			}
+		} else {
+			//pull it from container
+			buf := new(bytes.Buffer)
+			err = d.client.CopyFromContainer(docker.CopyFromContainerOptions{
+				OutputStream: buf,
+				Container:    cont,
+				Resource:     a.SourcePath,
+			})
+			if err != nil {
+				return err
+			}
+			//var out bytes.Buffer
+			r := bytes.NewReader(buf.Bytes())
+			tr := tar.NewReader(r)
+			for {
+				entry, err := tr.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return err
+				}
+				if d.debug {
+					fmt.Printf("[debug] read file from container: %s\n", entry.Name)
+				}
+				if !entry.FileInfo().IsDir() {
+					dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", entry.Name, a.DestinationDir+"/"+entry.Name))
+					if err := tw.WriteHeader(entry); err != nil {
+						return err
+					}
+					if _, err := io.Copy(tw, tr); err != nil {
+						return err
+					}
+				}
+			}
 		}
+	}
+
+	hdr := &tar.Header{
+		Name: "Dockerfile",
+		Size: int64(dockerFile.Len()),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return err
+	}
+	if _, err := io.Copy(tw, dockerFile); err != nil {
+		return err
 	}
 	if err := tw.Close(); err != nil {
 		return err
 	}
+
+	opts := docker.BuildImageOptions{
+		Name:           resultTag,
+		InputStream:    resulTarball,
+		OutputStream:   os.Stdout,
+		RmTmpContainer: true,
+		SuppressOutput: false,
+		NoCache:        true,
+	}
+
+	if err := d.client.BuildImage(opts); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -319,8 +527,11 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 	//build tarball
 	out := new(bytes.Buffer)
 	tw := tar.NewWriter(out)
-	err := d.tarball(pathToDir, "", out, tw)
+	err := d.tarball(pathToDir, "", tw)
 	if err != nil {
+		return err
+	}
+	if err := tw.Close(); err != nil {
 		return err
 	}
 	opts := docker.BuildImageOptions{

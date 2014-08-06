@@ -40,9 +40,8 @@ type GenericBuild struct {
 }
 
 type Artifact struct {
-	BuiltPath       string
-	IsDirectory     bool
-	DestinationPath string
+	BuiltPath      string
+	DestinationDir string
 }
 
 type Extraction struct {
