@@ -167,7 +167,6 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	for k, v := range runconf.Volumes {
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
 	}
-	fmt.Printf("xxx host binds %+v\n", host)
 
 	//convert the types of the elements of this map so that *our* clients don't
 	//see the inner types

@@ -28,7 +28,6 @@ func (g *goBuilder) tag() string {
 // if source has changed.
 func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 	/// this case tests the go source code with a sequence of probes
-	fmt.Printf("xxxx ENTER OOD\n")
 
 	t, err := tagToTime(g.tag(), conf.cli)
 	if err != nil {
@@ -62,7 +61,6 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	/// this case tests the go source code with a sequence of probes
-	fmt.Printf("xxxx FORM BUILD COMMOND\n")
 
 	//we need to do this to test our source code for OOD
 	runConfig, sequence, err := g.formBuildCommand(conf, true)
@@ -70,7 +68,6 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, err
 	}
 	for i, seq := range sequence {
-		fmt.Printf("xxxx %+v %+v\n", runConfig, sequence)
 		//fire for range
 		buf, _, err := conf.cli.CmdRun(runConfig, seq...)
 		if err != nil {
