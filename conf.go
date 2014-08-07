@@ -154,6 +154,7 @@ func (c *Config) Build(name string) error {
 	if !isPresent {
 		return fmt.Errorf("no such target for build: %s", name)
 	}
+	fmt.Printf("xxxx in conf build %s\n", name)
 	ood, err := node.isOutOfDate(c)
 	if err != nil {
 		return err
@@ -195,5 +196,6 @@ func (c *Config) codeVolumes() (map[string]string, error) {
 		}
 		results[path] = v.MountedAt
 	}
+	fmt.Printf("xxxx code volumes %+v\n", results)
 	return results, nil
 }

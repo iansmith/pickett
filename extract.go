@@ -45,13 +45,8 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, nil
 	}
 
-	//note that this is NOT path translated for the virtual machine!!
-	dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
-	volumes := make(map[string]string)
-	volumes[dir] = conf.CodeVolume.MountedAt
-
 	//get the last change to a source  artifact
-	last, sources, err := e.getSourceExtractions(volumes)
+	last, sources, err := e.getSourceExtractions(conf)
 	if err != nil {
 		return time.Time{}, true, err
 	}
@@ -128,7 +123,15 @@ func lastTimeInADirTree(path string, bestSoFar time.Time) (time.Time, error) {
 
 //This function is here to walk around on the known artifacts looking for ones that happen to be "inside"
 //the source directories.  Things that are have to handled specially by various parts of the extraction.
-func (e *extractionBuilder) getSourceExtractions(volumes map[string]string) (time.Time, map[string]string, error) {
+func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[string]string, error) {
+
+	//note that this is NOT path translated for the virtual machine!!
+	volumes := make(map[string]string)
+	for _, cv := range conf.CodeVolumes {
+		dir := conf.helper.DirectoryRelative(cv.Directory)
+		volumes[dir] = cv.MountedAt
+	}
+
 	//this is keyed by the source of the artifacts
 	realPathSource := make(map[string]string)
 
@@ -181,12 +184,7 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 
 	var err error
 
-	//note that this is NOT path translated for the virtual machine!!
-	dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
-	volumes := make(map[string]string)
-	volumes[dir] = conf.CodeVolume.MountedAt
-
-	_, realPathSource, err := e.getSourceExtractions(volumes)
+	_, realPathSource, err := e.getSourceExtractions(conf)
 	if err != nil {
 		return time.Time{}, err
 	}
