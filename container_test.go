@@ -13,7 +13,7 @@ import (
 const (
 	DIR    = "/foo/bar/baz/mydir" //as if the file content lives in this dir
 	SOMEID = "abcdef012345678"
-	BLETCH = "blah/bletch"
+	BLETCH = "blah:bletch"
 	MYDIR  = "mydir"
 )
 
@@ -64,11 +64,11 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	///
 	//at start, we don't know antyhing about the time
 	//
-	node := c.nameToNode["blah/bletch"]
+	node := c.nameToNode["blah:bletch"]
 	if !node.time().IsZero() {
 		t.Fatalf("failed to initialize times correctly: %v\n", node.time())
 	}
-	c.Build("blah/bletch")
+	c.Build("blah:bletch")
 
 	//
 	// we have rebuilt, check the time on the node

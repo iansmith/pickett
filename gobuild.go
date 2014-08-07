@@ -27,6 +27,8 @@ func (g *goBuilder) tag() string {
 // ood is true if we are older than our build in container.  We are also out of date
 // if source has changed.
 func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
+	/// this case tests the go source code with a sequence of probes
+
 	t, err := tagToTime(g.tag(), conf.cli)
 	if err != nil {
 		return time.Time{}, true, err
@@ -95,26 +97,18 @@ func (g *goBuilder) formBuildCommand(conf *Config, dontExecute bool) (*io.RunCon
 		waitOutput = true
 	}
 
-	volume := make(map[string]string)
+	volumes, err := conf.codeVolumes()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	resultConfig := &io.RunConfig{
 		Attach:     attach,
 		WaitOutput: waitOutput,
-		Volumes:    volume,
+		Volumes:    volumes,
 		Image:      g.runIn.name(),
 	}
 
-	if conf.CodeVolume.Directory != "" {
-		dir := conf.helper.DirectoryRelative(conf.CodeVolume.Directory)
-		mapped := dir
-		if conf.vbox.NeedPathTranslation() {
-			var err error
-			mapped, err = conf.vbox.CodeVolumeToVboxPath(dir)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		volume[mapped] = conf.CodeVolume.MountedAt
-	}
 	var baseCmd []string
 	if dontExecute {
 		baseCmd = strings.Split(strings.Trim(g.probe, " \n"), " ")

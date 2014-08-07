@@ -25,7 +25,7 @@ func setupForDontBuildBletch(controller *gomock.Controller, helper *io.MockHelpe
 	helper.EXPECT().LastTimeInDirRelative("mydir").Return(hourAgo, nil)
 	insp := io.NewMockInspectedImage(controller)
 	insp.EXPECT().CreatedTime().Return(now)
-	cli.EXPECT().InspectImage("blah/bletch").Return(insp, nil)
+	cli.EXPECT().InspectImage("blah:bletch").Return(insp, nil)
 
 	return c
 }
@@ -48,7 +48,7 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 
 	//we want to start a build of "chattanooga"
 	fakeInspectError := fmt.Errorf("no such tag, BOOONG you lose")
-	cli.EXPECT().InspectImage("chattanooga").Return(nil, fakeInspectError)
+	cli.EXPECT().InspectImage("fart:chattanooga").Return(nil, fakeInspectError)
 
 	// mock out the docker api calls to build/test the software
 	first := cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "p4...").Return(nil, "some_cont", nil)
@@ -58,7 +58,7 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	//one commits, one for each successful build
 	cli.EXPECT().CmdCommit("some_cont", nil)
 
-	if err := c.Build("chattanooga"); err != fakeErr {
+	if err := c.Build("fart:chattanooga"); err != fakeErr {
 		t.Errorf("failed to get expected error: %v", err)
 	}
 }
@@ -86,8 +86,8 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	insp := io.NewMockInspectedImage(controller)
 	insp.EXPECT().CreatedTime().Return(now)
 
-	first := cli.EXPECT().InspectImage("nashville").Return(nil, fakeInspectError)
-	cli.EXPECT().InspectImage("nashville").Return(insp, nil).After(first)
+	first := cli.EXPECT().InspectImage("test:nashville").Return(nil, fakeInspectError)
+	cli.EXPECT().InspectImage("test:nashville").Return(insp, nil).After(first)
 
 	// test we are already sure we need to build, so we don't test to see if OOD
 	// via go, just run the build
@@ -99,7 +99,7 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 	cli.EXPECT().CmdTag("imagehumbug", true, &io.TagInfo{"test", "nashville"})
 
 	//hit it!
-	c.Build("nashville")
+	c.Build("test:nashville")
 }
 
 func TestGoPackagesOODOnSource(t *testing.T) {
@@ -125,7 +125,7 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	now := time.Now()
 	insp := io.NewMockInspectedImage(controller)
 	insp.EXPECT().CreatedTime().Return(now).Times(2)
-	cli.EXPECT().InspectImage("nashville").Return(insp, nil).Times(2)
+	cli.EXPECT().InspectImage("test:nashville").Return(insp, nil).Times(2)
 
 	//
 	// this is the test of how the go source OOD really works
@@ -170,6 +170,6 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	cli.EXPECT().CmdCommit("cont2", nil).Return("someotherid", nil)
 	cli.EXPECT().CmdTag("someotherid", true, &io.TagInfo{"test", "nashville"})
 	//hit it!
-	c.Build("nashville")
+	c.Build("test:nashville")
 
 }

@@ -16,28 +16,31 @@ var example1 = `
 	},
 
 	// a comment
-	"CodeVolume" : {
-		"Directory" : "src", //will expand to /home/gredo/src
-		"MountedAt" : "/han",  // stray comma?,
-		"SomeExtra" : "cruft"
-	},
+	"CodeVolumes" : [
+		{
+			"Directory" : "src", //will expand to /home/gredo/src
+			"MountedAt" : "/han",  // stray comma?,
+			"SomeExtra" : "cruft"  
+		}
+	],
 	"Containers" : [
 		{
-			"Tag" : "blah/bletch",
+			"Repository": "blah",
+			"Tag" : "bletch",
 			"Directory" : "mydir"
 		}
 	],
 	"GoBuilds" : [
 		{
 			"Repository": "test",
-			"RunIn" : "blah/bletch",
+			"RunIn" : "blah:bletch",
 			"Packages": ["p1...", "p2/p3" ],
 			"Command" : "go test",
 			"Tag": "nashville"
 		},
 		{
 			"Repository": "fart",
-			"RunIn" : "blah/bletch",
+			"RunIn" : "blah:bletch",
 			"Packages": ["p4...", "p5/p6" ],
 			"Tag": "chattanooga"
 		}
@@ -70,7 +73,7 @@ func TestConf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}
-	if c.CodeVolume.Directory != "src" {
+	if c.CodeVolumes[0].Directory != "src" {
 		t.Errorf("failed to parse CodeVolume>Directory")
 	}
 }

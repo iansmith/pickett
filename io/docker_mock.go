@@ -4,9 +4,9 @@
 package io
 
 import (
+	gomock "code.google.com/p/gomock/gomock"
 	bytes "bytes"
 	time "time"
-	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of DockerCli interface
@@ -76,6 +76,16 @@ func (_m *MockDockerCli) CmdBuild(_param0 *BuildConfig, _param1 string, _param2 
 
 func (_mr *_MockDockerCliRecorder) CmdBuild(arg0, arg1, arg2 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdBuild", arg0, arg1, arg2)
+}
+
+func (_m *MockDockerCli) CmdCopy(_param0 map[string]string, _param1 string, _param2 string, _param3 []*CopyArtifact, _param4 string) error {
+	ret := _m.ctrl.Call(_m, "CmdCopy", _param0, _param1, _param2, _param3, _param4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdCopy(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCopy", arg0, arg1, arg2, arg3, arg4)
 }
 
 func (_m *MockDockerCli) CmdStop(_param0 string) error {
@@ -190,4 +200,14 @@ func (_m *MockInspectedContainer) ContainerName() string {
 
 func (_mr *_MockInspectedContainerRecorder) ContainerName() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerName")
+}
+
+func (_m *MockInspectedContainer) ExitStatus() int {
+	ret := _m.ctrl.Call(_m, "ExitStatus")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+func (_mr *_MockInspectedContainerRecorder) ExitStatus() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ExitStatus")
 }

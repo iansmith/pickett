@@ -40,9 +40,8 @@ type GenericBuild struct {
 }
 
 type Artifact struct {
-	BuiltPath       string
-	IsDirectory     bool
-	DestinationPath string
+	BuiltPath      string
+	DestinationDir string
 }
 
 type Extraction struct {
@@ -70,7 +69,7 @@ type BuildOpts struct {
 
 type Config struct {
 	DockerBuildOptions BuildOpts
-	CodeVolume         CodeVolume
+	CodeVolumes        []*CodeVolume
 	Containers         []*Container
 	GoBuilds           []*GoBuild
 	Extractions        []*Extraction
@@ -178,4 +177,23 @@ func (c *Config) Execute(name string) error {
 		return err
 	}
 	return net.destroy(c)
+}
+
+func (c *Config) codeVolumes() (map[string]string, error) {
+
+	results := make(map[string]string)
+
+	for _, v := range c.CodeVolumes {
+		dir := c.helper.DirectoryRelative(v.Directory)
+		path := dir
+		var err error
+		if c.vbox.NeedPathTranslation() {
+			path, err = c.vbox.CodeVolumeToVboxPath(dir)
+			if err != nil {
+				return nil, err
+			}
+		}
+		results[path] = v.MountedAt
+	}
+	return results, nil
 }

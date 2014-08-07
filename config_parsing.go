@@ -71,7 +71,7 @@ func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) erro
 		}
 		r, found := c.nameToNode[build.RunIn]
 		if !found {
-			return fmt.Errorf("Unable to find %s trying to build %s: maybe you need to 'docker pull' it?",
+			return fmt.Errorf("Unable to find '%s' trying to build '%s': maybe you need to 'docker pull' it?",
 				build.RunIn, build.Tag)
 		}
 
