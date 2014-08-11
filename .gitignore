@@ -6,3 +6,6 @@
 
 # go
 Godeps
+
+#coverage
+coverage.out
