@@ -4,9 +4,9 @@
 package io
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	bytes "bytes"
 	time "time"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of DockerCli interface
@@ -86,6 +86,17 @@ func (_m *MockDockerCli) CmdCopy(_param0 map[string]string, _param1 string, _par
 
 func (_mr *_MockDockerCliRecorder) CmdCopy(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCopy", arg0, arg1, arg2, arg3, arg4)
+}
+
+func (_m *MockDockerCli) CmdLastModTime(_param0 map[string]string, _param1 string, _param2 []*CopyArtifact) (time.Time, error) {
+	ret := _m.ctrl.Call(_m, "CmdLastModTime", _param0, _param1, _param2)
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockDockerCliRecorder) CmdLastModTime(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdLastModTime", arg0, arg1, arg2)
 }
 
 func (_m *MockDockerCli) CmdStop(_param0 string) error {

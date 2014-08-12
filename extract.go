@@ -3,7 +3,6 @@ package pickett
 import (
 	"fmt"
 	"github.com/igneous-systems/pickett/io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -88,39 +87,6 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 	return t, false, nil
 }
 
-func lastTimeInADirTree(path string, bestSoFar time.Time) (time.Time, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	if !info.IsDir() {
-		if info.ModTime().After(bestSoFar) {
-			return info.ModTime(), nil
-		}
-		return bestSoFar, nil
-	}
-	fp, err := os.Open(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	names, err := fp.Readdirnames(0)
-	if err != nil {
-		return time.Time{}, err
-	}
-	best := bestSoFar
-	for _, name := range names {
-		child := filepath.Join(path, name)
-		t, err := lastTimeInADirTree(child, best)
-		if err != nil {
-			return time.Time{}, err
-		}
-		if t.After(best) {
-			best = t
-		}
-	}
-	return best, nil
-}
-
 //This function is here to walk around on the known artifacts looking for ones that happen to be "inside"
 //the source directories.  Things that are have to handled specially by various parts of the extraction.
 func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[string]string, error) {
@@ -152,10 +118,10 @@ func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[s
 			}
 		}
 	}
-
 	best := time.Time{}
+	//test each true source dir for latest time
 	for _, p := range realPathSource {
-		t, err := lastTimeInADirTree(p, best)
+		t, err := conf.helper.LastTimeInDir(p)
 		if err != nil {
 			return time.Time{}, nil, err
 		}

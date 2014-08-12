@@ -3,7 +3,6 @@ package io
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,7 +19,8 @@ type Helper interface {
 	CheckFatal(error, string, ...interface{})
 	ConfigReader() io.Reader
 	ConfigFile() string
-	LastTimeInDirRelative(dir string) (time.Time, error)
+	LastTimeInDirRelative(string) (time.Time, error)
+	LastTimeInDir(string) (time.Time, error)
 }
 
 // NewHelper creates an implementation of the Helper that runs against
@@ -107,24 +107,46 @@ func (i *helper) ConfigFile() string {
 	return i.confFile
 }
 
-//LastTimeInDirRelative looks at the directory, relative to the configuration
-//file and returns the latest modification time found on a file in that directory. Child directories are not
-//neither searched nor their timestamps examined.  If there are no entries in the
-//directory, then the latest time is defined to be the zero value of time.Time.
-func (i *helper) LastTimeInDirRelative(dir string) (time.Time, error) {
-	//i.Debug("LastTimeInDirRelative(%s)--> %s", dir, i.DirectoryRelative(dir))
-	info, err := ioutil.ReadDir(i.DirectoryRelative(dir))
+func (i *helper) LastTimeInDirRelative(relative string) (time.Time, error) {
+	dir := i.DirectoryRelative(relative)
+	return lastTimeInADirTree(dir, time.Time{})
+}
+
+func (i *helper) LastTimeInDir(fullPath string) (time.Time, error) {
+	return lastTimeInADirTree(fullPath, time.Time{})
+}
+
+//lastTimeInADirTree recursively traverses a directory and looks for
+//the latest time it can find.
+func lastTimeInADirTree(path string, bestSoFar time.Time) (time.Time, error) {
+	info, err := os.Stat(path)
 	if err != nil {
 		return time.Time{}, err
 	}
-	var last time.Time
-	for _, entry := range info {
-		if entry.IsDir() {
-			continue
+	if !info.IsDir() {
+		if info.ModTime().After(bestSoFar) {
+			return info.ModTime(), nil
 		}
-		if entry.ModTime().After(last) {
-			last = entry.ModTime()
+		return bestSoFar, nil
+	}
+	fp, err := os.Open(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	names, err := fp.Readdirnames(0)
+	if err != nil {
+		return time.Time{}, err
+	}
+	best := bestSoFar
+	for _, name := range names {
+		child := filepath.Join(path, name)
+		t, err := lastTimeInADirTree(child, best)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if t.After(best) {
+			best = t
 		}
 	}
-	return last, nil
+	return best, nil
 }

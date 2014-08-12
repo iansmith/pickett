@@ -4,10 +4,10 @@
 package io
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	io "io"
 	os "os"
 	time "time"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of Helper interface
@@ -122,8 +122,8 @@ func (_mr *_MockHelperRecorder) ConfigFile() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ConfigFile")
 }
 
-func (_m *MockHelper) LastTimeInDirRelative(dir string) (time.Time, error) {
-	ret := _m.ctrl.Call(_m, "LastTimeInDirRelative", dir)
+func (_m *MockHelper) LastTimeInDirRelative(_param0 string) (time.Time, error) {
+	ret := _m.ctrl.Call(_m, "LastTimeInDirRelative", _param0)
 	ret0, _ := ret[0].(time.Time)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -131,4 +131,15 @@ func (_m *MockHelper) LastTimeInDirRelative(dir string) (time.Time, error) {
 
 func (_mr *_MockHelperRecorder) LastTimeInDirRelative(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "LastTimeInDirRelative", arg0)
+}
+
+func (_m *MockHelper) LastTimeInDir(_param0 string) (time.Time, error) {
+	ret := _m.ctrl.Call(_m, "LastTimeInDir", _param0)
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockHelperRecorder) LastTimeInDir(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "LastTimeInDir", arg0)
 }
