@@ -110,26 +110,53 @@ func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.Docker
 	if err != nil {
 		return nil, err
 	}
-	conf.nameToNode = make(map[string]node)
-	conf.nameToNetwork = make(map[string]runner)
-	checks := []func(pickett_io.Helper, pickett_io.DockerCli) error{
-		conf.checkContainerNodes,
-		conf.checkGoBuildNodes,
-		conf.checkExtractionNodes,
-		conf.checkNetworks,
-	}
 
-	for _, fn := range checks {
-		if err := fn(helper, cli); err != nil {
-			return nil, err
-		}
-	}
-
-	//save the objects
+	//save the objects and put them where the true configuration parsing
+	//can see them
 	conf.helper = helper
 	conf.cli = cli
 	conf.etcd = etcd
 	conf.vbox = vbox
+
+	//these are the two key OUTPUT datastructures when we are done with
+	//all the parsing parts
+	conf.nameToNode = make(map[string]node)
+	conf.nameToNetwork = make(map[string]runner)
+
+	// PART 1: containers cannot reference anything other than containers,
+	// PART 1: so we can just process them
+	if err := conf.checkContainerNodes(); err != nil {
+		return nil, err
+	}
+
+	//PART 2: Do the the simple portion of each of the three complex build
+	//PART 2: types.  Note that this does no introduce edges because it
+	//PART 2: may need all portsion of this to run before we would have the
+	//PART 2: the node we need.  The order of these does not matter.
+	goImpl, err := conf.checkGoBuildNodes()
+	if err != nil {
+		return nil, err
+	}
+	netImpl, err := conf.checkNetworkNodes()
+	if err != nil {
+		return nil, err
+	}
+	extractImpl, err := conf.checkExtractionNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	//PART 3: We now have the full set of possible nodes, so we want to
+	//PART 3: introduce edges between them.
+	if err := conf.dependenciesGoBuildNodes(goImpl); err != nil {
+		return nil, err
+	}
+	if err := conf.dependenciesNetworkNodes(netImpl); err != nil {
+		return nil, err
+	}
+	if err := conf.dependenciesExtractNodes(extractImpl); err != nil {
+		return nil, err
+	}
 
 	return conf, nil
 }
@@ -172,11 +199,7 @@ func (c *Config) Execute(name string) error {
 		return fmt.Errorf("no such target for build or run: %s", name)
 	}
 	_, err := net.run(true, c)
-	if err != nil {
-		fmt.Printf("[pickett] error in %s, not destroying network...\n", name)
-		return err
-	}
-	return net.destroy(c)
+	return err
 }
 
 func (c *Config) codeVolumes() (map[string]string, error) {
