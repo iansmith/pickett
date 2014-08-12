@@ -61,6 +61,7 @@ func (c *Config) checkContainerNodes(helper pickett_io.Helper, cli pickett_io.Do
 // this should not be called until after the checkSourceNodes() have been
 // extracted as it needs data structures built at that stage.
 func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) error {
+	implementations := make(map[*goBuilder]string)
 	for _, build := range c.GoBuilds {
 		w, err := c.newGoBuilder(build)
 		if err != nil {
@@ -69,17 +70,20 @@ func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) erro
 		if err := c.checkExistingName(build.Tag, true); err != nil {
 			return err
 		}
-		r, found := c.nameToNode[build.RunIn]
+		node := newNodeImpl(w)
+		c.nameToNode[w.tag()] = node
+		implementations[w] = strings.Trim(build.RunIn, " \n")
+	}
+	for w, runIn := range implementations {
+		r, found := c.nameToNode[runIn]
 		if !found {
 			return fmt.Errorf("Unable to find '%s' trying to build '%s': maybe you need to 'docker pull' it?",
-				build.RunIn, build.Tag)
+				runIn, w.tag())
 		}
-
 		//add edges
 		w.runIn = r
-		node := newNodeImpl(w)
+		node := c.nameToNode[w.tag()]
 		r.addOut(node)
-		c.nameToNode[w.tag()] = node
 	}
 	return nil
 }
