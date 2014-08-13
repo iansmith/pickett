@@ -470,7 +470,10 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 			}
 			//kinda hacky: we use a.SourcePath as the name *inside* the tarball so we can get the
 			//directory name right on the final output
-			dockerFile.WriteString(fmt.Sprintf("COPY %s TO %s .\n", a.SourcePath, a.DestinationDir))
+			if d.debug {
+				fmt.Printf("[debug] COPY %s TO %s.", a.SourcePath, a.DestinationDir)
+			}
+			dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
 			if !isFile {
 				if err := d.tarball(truePath, a.SourcePath, tw); err != nil {
 					return err
