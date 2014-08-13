@@ -2,10 +2,11 @@ package pickett
 
 import (
 	"fmt"
-	"github.com/igneous-systems/pickett/io"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/igneous-systems/pickett/io"
 )
 
 // extractionBuilder implements the builder interface so it can be part of a node.
@@ -55,7 +56,10 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, nil
 	}
 
-	art := e.toCopyArtifacts()
+	art, err := e.toCopyArtifacts()
+	if err != nil {
+		return time.Time{}, true, err
+	}
 
 	//
 	// XXX It's not clear that this code is ever called.  To get this code to be called, you would
@@ -95,6 +99,7 @@ func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[s
 	volumes := make(map[string]string)
 	for _, cv := range conf.CodeVolumes {
 		dir := conf.helper.DirectoryRelative(cv.Directory)
+		fmt.Printf("Dir %s Mounted at %v", dir, cv)
 		volumes[dir] = cv.MountedAt
 	}
 
@@ -132,16 +137,19 @@ func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[s
 	return best, realPathSource, nil
 }
 
-func (e *extractionBuilder) toCopyArtifacts() []*io.CopyArtifact {
+func (e *extractionBuilder) toCopyArtifacts() ([]*io.CopyArtifact, error) {
 	art := []*io.CopyArtifact{}
 	for _, a := range e.artifacts {
+		if len(a.DestinationDir) == 0 || len(a.BuiltPath) == 0 {
+			return art, fmt.Errorf("An artifact must have a DestinationDir & a BuildPath defined !")
+		}
 		cp := &io.CopyArtifact{
 			SourcePath:     a.BuiltPath,
 			DestinationDir: a.DestinationDir,
 		}
 		art = append(art, cp)
 	}
-	return art
+	return art, nil
 }
 
 //build does the work of coping data from the source image (runIn) and then
@@ -155,7 +163,10 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	art := e.toCopyArtifacts()
+	art, err := e.toCopyArtifacts()
+	if err != nil {
+		return time.Time{}, err
+	}
 
 	err = conf.cli.CmdCopy(realPathSource, e.runIn.name, e.mergeWith.name, art, e.tag())
 	if err != nil {
