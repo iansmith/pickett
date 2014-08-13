@@ -121,6 +121,10 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	for tries < 3 {
 		opts.Config = config
 		opts.Name = newPhrase()
+		if d.showDocker {
+			fmt.Printf("[docker cmd] Creating container %s from image: %s\n", opts.Name, opts.Config.Image)
+		}
+
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
 			detail, ok := err.(*docker.Error)
@@ -136,6 +140,11 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	}
 	if !ok {
 		opts.Name = "" //fallback
+		opts.Name = newPhrase()
+		if d.showDocker {
+			fmt.Printf("[docker cmd] Creating container. Name: %s\n", opts.Name)
+		}
+
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
 			return nil, err
@@ -180,6 +189,10 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		}
 	}
 	host.PortBindings = convertedMap
+
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Starting container %s . %v\n", cont.ID, host)
+	}
 
 	err = d.client.StartContainer(cont.ID, host)
 	if err != nil {
@@ -258,6 +271,11 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 		opts.Tag = info.Tag
 		opts.Repository = info.Repository
 	}
+
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, %Repo: %s\n", opts.Container, opts.Tag, opts.Repository)
+	}
+
 	image, err := d.client.CommitContainer(opts)
 	if err != nil {
 		return "", err
@@ -378,6 +396,10 @@ func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 		}
 		//pull it from container
 		buf := new(bytes.Buffer)
+		if d.debug {
+			fmt.Printf("[debug] Copying from container %s. Resource %s to %s\n", cont, a.SourcePath, a.DestinationDir)
+		}
+
 		err = d.client.CopyFromContainer(docker.CopyFromContainerOptions{
 			OutputStream: buf,
 			Container:    cont,
@@ -448,7 +470,7 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 			}
 			//kinda hacky: we use a.SourcePath as the name *inside* the tarball so we can get the
 			//directory name right on the final output
-			dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
+			dockerFile.WriteString(fmt.Sprintf("COPY %s TO %s .\n", a.SourcePath, a.DestinationDir))
 			if !isFile {
 				if err := d.tarball(truePath, a.SourcePath, tw); err != nil {
 					return err
@@ -515,6 +537,10 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 		NoCache:        true,
 	}
 
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Building image. Name: %s\n", opts.Name)
+	}
+
 	if err := d.client.BuildImage(opts); err != nil {
 		return err
 	}
@@ -543,6 +569,9 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 		NoCache:        config.NoCache,
 	}
 
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Building image. Name: %s\n", opts.Name)
+	}
 	if err := d.client.BuildImage(opts); err != nil {
 		return err
 	}
