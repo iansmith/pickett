@@ -44,9 +44,6 @@ type runner interface {
 
 	//again,this is building the image the runner runs in, not the runner itself
 	imageBuild(*Config) error
-
-	//when we are done we need to destroy both our object and the objects we created
-	destroy(*Config) error
 }
 
 //node is the abstraction for an element in the dependency graph of builders.

@@ -230,12 +230,11 @@ func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
 		containerName: value,
 		r:             r,
 	}
-	fmt.Printf("create XXXX policy input %+v\n", result)
 	// XXX this logic with the else clauses seems error prone
 	if present {
 		insp, err := conf.cli.InspectContainer(value)
 		if err != nil {
-			fmt.Printf("xxx ok to ignore this error?\n")
+			//fmt.Printf("xxx ok to ignore this error?\n")
 			conf.helper.Debug("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
 			_, err = conf.etcd.Del(formContainerKey(r))

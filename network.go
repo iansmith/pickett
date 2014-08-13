@@ -79,7 +79,7 @@ func (n *networkRunner) run(teeOutput bool, conf *Config) (*policyInput, error) 
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
 func (n *networkRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 	if !n.runIn.isNode {
-		conf.helper.Debug("'%s' can't be out of date, image '%s' is not buildable", n.name(), n.runIn.name)
+		conf.helper.Debug("'%s' can't be out of date, image '%s' is not buildable\n", n.name(), n.runIn.name)
 		return false, nil
 	}
 	return n.runIn.node.isOutOfDate(conf)
@@ -88,17 +88,17 @@ func (n *networkRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 // we build the image if indeed that is possible
 func (n *networkRunner) imageBuild(conf *Config) error {
 	if !n.runIn.isNode {
-		fmt.Printf("[pickett WARNING] '%s' can't be built, image '%s' is not buildable", n.name(), n.runIn.name)
+		fmt.Printf("[pickett WARNING] '%s' can't be built, image '%s' is not buildable\n", n.name(), n.runIn.name)
 		return nil
 	}
 	return n.runIn.node.build(conf)
 }
 
 type outcomeProxyBuilder struct {
-	net         *networkRunner
-	inputName   string
-	inputRunner runner
-	imageResult string
+	net        *networkRunner
+	inputName  string
+	repository string
+	tagname    string
 }
 
 func (o *outcomeProxyBuilder) ood(conf *Config) (time.Time, bool, error) {
@@ -106,8 +106,13 @@ func (o *outcomeProxyBuilder) ood(conf *Config) (time.Time, bool, error) {
 	if ood || err != nil {
 		return time.Time{}, ood, err
 	}
-	//evil, why is this abstraction breaking necessary?
-	return o.net.runIn.node.time(), false, nil
+
+	info, err := conf.cli.InspectImage(o.tag())
+	if err != nil {
+		//ignoring this because we are assuming it means does not exist
+		return time.Time{}, true, nil
+	}
+	return info.CreatedTime(), false, nil
 }
 
 func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
@@ -119,8 +124,15 @@ func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	fmt.Printf("should be doing the commit magic here...tear down and commit: %+v\n", in)
-	return time.Time{}, err
+	_, err = conf.cli.CmdCommit(in.containerName, &io.TagInfo{o.repository, o.tagname})
+	if err != nil {
+		return time.Time{}, err
+	}
+	insp, err := conf.cli.InspectImage(o.tag())
+	if err != nil {
+		return time.Time{}, err
+	}
+	return insp.CreatedTime(), nil
 }
 
 func (o *outcomeProxyBuilder) in() []node {
@@ -132,7 +144,7 @@ func (o *outcomeProxyBuilder) in() []node {
 }
 
 func (o *outcomeProxyBuilder) tag() string {
-	return o.imageResult
+	return o.repository + ":" + o.tagname
 }
 
 func (n *networkRunner) destroy(config *Config) error {
