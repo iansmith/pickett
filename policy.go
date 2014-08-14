@@ -151,29 +151,29 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 	//STEP1: is existing at all? All codepaths inside this branch return.
 	if !in.hasStarted {
 		if !p.startIfNonExistant {
-			fmt.Printf("[pickett] policy %s is not starting service %s", p, in.r.name())
+			flog.Infof("policy %s is not starting service %s", p, in.r.name())
 			return nil
 		}
 		if p.rebuildIfOOD && ood {
-			conf.helper.Debug("policy %s, rebuilding out of date image for '%s'", p, in.r.name())
+			flog.Debugf("policy %s, rebuilding out of date image for '%s'", p, in.r.name())
 			if err := in.r.imageBuild(conf); err != nil {
 				return err
 			}
 		}
-		conf.helper.Debug("policy %s, initial start of %s", p, in.r.name())
+		flog.Debugf("policy %s, initial start of %s", p, in.r.name())
 		return in.start(teeOutput, in.r.imageName(), links, conf.cli, conf.etcd)
 	}
 
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
-		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name())
+		flog.Debugf("policy %s, stopping %s (because its out of date)", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
 		in.isRunning = false
 	} else if in.isRunning && p.stop == ALWAYS {
-		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
+		flog.Debugf("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
 		err = in.stop(conf.cli, conf.etcd)
 		if err != nil {
 			return err
@@ -183,7 +183,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 	//STEP3: start?
 	if !in.isRunning {
 		if ood && p.rebuildIfOOD {
-			conf.helper.Debug("policy %s, rebuilding out of date image for '%s'", in.r.name())
+			flog.Debugf("policy %s, rebuilding out of date image for '%s'", in.r.name())
 			if err := in.r.imageBuild(conf); err != nil {
 				return err
 			}
@@ -198,11 +198,11 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			if err != nil {
 				return err
 			}
-			conf.helper.Debug("policy %s, continuing %s from image %s", p, in.r.name(), img)
+			flog.Debugf("policy %s, continuing %s from image %s", p, in.r.name(), img)
 			startIt = true
 		} else if p.start == RESTART {
 			img = in.r.imageName()
-			conf.helper.Debug("policy %s,  %s is not running, restarting from image %s", p, in.r.name(), img)
+			flog.Debugf("policy %s,  %s is not running, restarting from image %s", p, in.r.name(), img)
 			startIt = true
 		}
 		if startIt {
@@ -210,10 +210,10 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 				return err
 			}
 		} else {
-			conf.helper.Debug("policy %s, not starting %s", p, in.r.name())
+			flog.Debugf("policy %s, not starting %s", p, in.r.name())
 		}
 	} else if teeOutput {
-		fmt.Printf("[pickett] policy %s, ignoring %s which is already running", p, in.r.name())
+		flog.Infof("policy %s, ignoring %s which is already running", p, in.r.name())
 	}
 	return nil
 }
@@ -234,8 +234,8 @@ func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
 	if present {
 		insp, err := conf.cli.InspectContainer(value)
 		if err != nil {
-			//fmt.Printf("xxx ok to ignore this error?\n")
-			conf.helper.Debug("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
+			//flog.Errorf("xxx ok to ignore this error?: %v", err)
+			flog.Debugf("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
 			_, err = conf.etcd.Del(formContainerKey(r))
 			if err != nil {

@@ -1,8 +1,6 @@
 package io
 
 import (
-	"fmt"
-
 	"github.com/coreos/go-etcd/etcd"
 )
 
@@ -18,13 +16,11 @@ const (
 
 type etcdClient struct {
 	client *etcd.Client
-	debug  bool
 }
 
-func NewEtcdClient(debug bool) (EtcdClient, error) {
+func NewEtcdClient() (EtcdClient, error) {
 	result := &etcdClient{
 		client: etcd.NewClient([]string{constructEctdHost()}),
-		debug:  debug,
 	}
 	/*	client, err := etcd.NewTLSClient(
 				[]string{"https://iansmith.iggy.bz:4001"},
@@ -52,71 +48,47 @@ func NewEtcdClient(debug bool) (EtcdClient, error) {
 }
 
 func (e *etcdClient) Put(path string, value string) (string, error) {
-	if e.debug {
-		fmt.Printf("[etcd] PUT %s %s\n", path, value)
-	}
+	flog.Debugf("[etcd] PUT %s %s", path, value)
 	resp, err := e.client.Set(path, value, A_LONG_TIME)
 	if err != nil {
-		if e.debug {
-			fmt.Printf("[etcd err] %v\n", err)
-		}
+		flog.Debugf("[etcd err] %v", err)
 		return "", err
 	}
 	if resp.PrevNode == nil {
-		if e.debug {
-			fmt.Printf("[etcd result] [none]\n")
-		}
+		flog.Debugf("[etcd result] [none]")
 		return "", nil
 	}
-	if e.debug {
-		fmt.Printf("[etcd result] %s\n", resp.PrevNode.Value)
-	}
+	flog.Debugf("[etcd result] %s", resp.PrevNode.Value)
 	return resp.PrevNode.Value, nil
 }
 
 func (e *etcdClient) Get(path string) (string, bool, error) {
-	if e.debug {
-		fmt.Printf("[etcd] GET %s\n", path)
-	}
+	flog.Debugf("[etcd] GET %s", path)
 	resp, err := e.client.Get(path, false, false)
 	if err != nil {
 		detail := err.(*etcd.EtcdError)
 		if detail.ErrorCode == 100 {
-			if e.debug {
-				fmt.Printf("[etcd result] not found\n")
-			}
+			flog.Debugf("[etcd result] not found")
 			return "", false, nil
 		}
-		if e.debug {
-			fmt.Printf("[etcd err] %v\n", err)
-		}
+		flog.Debugf("[etcd err] %v", err)
 		return "", false, err
 	}
-	if e.debug {
-		fmt.Printf("[etcd result] %s\n", resp.Node.Value)
-	}
+	flog.Debugf("[etcd result] %s", resp.Node.Value)
 	return resp.Node.Value, true, nil
 }
 
 func (e *etcdClient) Del(path string) (string, error) {
-	if e.debug {
-		fmt.Printf("[etcd] DEL %s\n", path)
-	}
+	flog.Debugf("[etcd] DEL %s", path)
 	resp, err := e.client.Delete(path, false)
 	if err != nil {
-		if e.debug {
-			fmt.Printf("[etcd err] %v\n", err)
-		}
+		flog.Debugf("[etcd err] %v", err)
 		return "", err
 	}
 	if resp.PrevNode == nil {
-		if e.debug {
-			fmt.Printf("[etcd result] [none]\n")
-		}
+		flog.Debugf("[etcd result] [none]")
 		return "", nil
 	}
-	if e.debug {
-		fmt.Printf("[etcd result] %s\n", resp.PrevNode.Value)
-	}
+	flog.Debugf("[etcd result] %s", resp.PrevNode.Value)
 	return resp.PrevNode.Value, nil
 }

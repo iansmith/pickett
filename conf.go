@@ -90,7 +90,9 @@ type Config struct {
 // items therein.
 func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.DockerCli, etcd pickett_io.EtcdClient, vbox pickett_io.VirtualBox) (*Config, error) {
 	all, err := ioutil.ReadAll(reader)
-	helper.CheckFatal(err, "could not read all of configuration file: %v")
+	if err != nil {
+		return nil, fmt.Errorf("could not read all of configuration file: %v", err)
+	}
 	lines := strings.Split(string(all), "\n")
 	var noComments bytes.Buffer
 	for _, line := range lines {
@@ -186,7 +188,7 @@ func (c *Config) Build(name string) error {
 		return err
 	}
 	if !ood {
-		fmt.Printf("[pickett] nothing to do for '%s'\n", node.name())
+		flog.Infof("nothing to do for '%s'", node.name())
 		return nil
 	}
 	return node.build(c)

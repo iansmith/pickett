@@ -21,17 +21,15 @@ type VirtualBox interface {
 }
 
 type vboxManage struct {
-	debug      bool
 	vboxmanage string
 }
 
-func NewVirtualBox(debug bool) (VirtualBox, error) {
+func NewVirtualBox() (VirtualBox, error) {
 	p, err := exec.LookPath("vboxmanage")
 	if err != nil {
 		return nil, PATH_BUSTED
 	}
 	return &vboxManage{
-		debug:      debug,
 		vboxmanage: p,
 	}, nil
 }
@@ -59,9 +57,7 @@ func (v *vboxManage) guessHomeDir(vol string) (string, error) {
 		return "", errors.New(fmt.Sprintf("Cant guess a /vagrant mapping from %s", vol))
 	}
 	result := "/vagrant/" + vol[len(home):]
-	if v.debug {
-		fmt.Printf("[debug] no virtualbox mappings, guessing %s -> %s...\n", vol, result)
-	}
+	flog.Debugf("no virtualbox mappings, guessing %s -> %s...", vol, result)
 	return result, nil
 }
 
@@ -84,9 +80,7 @@ func (v *vboxManage) CodeVolumeToVboxPath(vol string) (string, error) {
 		return "", CANT_UNDERSTAND_OUTPUT
 	}
 	id := strings.Trim(parts[1], "}")
-	if v.debug {
-		fmt.Printf("[debug] virtual machine id is %s\n", id)
-	}
+	flog.Debugf("virtual machine id is %s", id)
 	cmd = exec.Command(v.vboxmanage, "showvminfo", id, "--machinereadable")
 	out, err = cmd.Output()
 	if err != nil {
@@ -131,15 +125,11 @@ func (v *vboxManage) CodeVolumeToVboxPath(vol string) (string, error) {
 	if len(mapping) == 0 {
 		return v.guessHomeDir(vol)
 	}
-	if v.debug {
-		fmt.Printf("[debug] virtualbox path mappings %+v\n", mapping)
-	}
+	flog.Debugf("virtualbox path mappings %+v", mapping)
 	for source, dest := range mapping {
 		if strings.HasPrefix(vol, source) {
 			result := "/" + dest + vol[len(source):]
-			if v.debug {
-				fmt.Printf("[debug] code volume %s converted to %s\n", vol, result)
-			}
+			flog.Debugf("code volume %s converted to %s", vol, result)
 			return result, nil
 		}
 	}
