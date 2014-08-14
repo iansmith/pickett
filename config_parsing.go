@@ -10,20 +10,29 @@ import (
 //checkExistingNames is a helper to generate an error if the name is already
 //in use in this configuration.  Pass true if you are interested in build nodes,
 //false for networks.
-func (c *Config) checkExistingName(proposed string, wantNode bool) error {
+func (c *Config) checkExistingNodeName(proposed string) error {
 	p := strings.Trim(proposed, " \n")
 	if p == "" {
 		return fmt.Errorf("can't have an empty name in configuration file")
 	}
-	if wantNode {
-		if c.nameToNode[p] != nil {
-			return fmt.Errorf("name %s already in use in this configuration (build node)", p)
-		}
-	}
-	if _, ok := c.nameToTopo[p]; ok {
-		return fmt.Errorf("topo node name %s already in use in this configuration", p)
+	if c.nameToNode[p] != nil {
+		return fmt.Errorf("name %s already in use in this configuration (build node)", p)
 	}
 	return nil
+}
+
+func (c *Config) checkExistingTopologyName(topoName, nodeName string) error {
+	t := strings.Trim(topoName, " \n")
+	n := strings.Trim(nodeName, " \n")
+	tmap, ok := c.nameToTopology[t]
+	if !ok {
+		return fmt.Errorf("no topology named %s in use in this configuration", t)
+	}
+	if _, ok := tmap[n]; ok {
+		return fmt.Errorf("node named %s already in use in topology %s", n, t)
+	}
+	return nil
+
 }
 
 // checkContainerNodes walks all the "container" nodes defined in the configuration file.
@@ -34,7 +43,7 @@ func (c *Config) checkContainerNodes() error {
 		if err != nil {
 			return err
 		}
-		if err := c.checkExistingName(img.Tag, true); err != nil {
+		if err := c.checkExistingNodeName(img.Tag); err != nil {
 			return err
 		}
 		node := newNodeImpl(w)
@@ -67,7 +76,7 @@ func (c *Config) checkGoBuildNodes() (map[*goBuilder]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := c.checkExistingName(build.Tag, true); err != nil {
+		if err := c.checkExistingNodeName(build.Tag); err != nil {
 			return nil, err
 		}
 		node := newNodeImpl(w)
@@ -114,7 +123,7 @@ func (c *Config) checkExtractionNodes() (map[*extractionBuilder][]string, error)
 		if err != nil {
 			return nil, err
 		}
-		if err := c.checkExistingName(w.tag(), true); err != nil {
+		if err := c.checkExistingNodeName(w.tag()); err != nil {
 			return nil, err
 		}
 		//put it in the list
@@ -190,24 +199,26 @@ func contains(list []string, candidate string) bool {
 //checkNetworkNodes verifies the easy part of all the network setups in this configuration file.
 //Thes does the portion that does not have dependencies and returns the necessary
 //bookkeeping for that to be done in a later pass.
-func (c *Config) checkTopologyNodes() (map[*topoRunner]string, error) {
+func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map[*topoRunner]string, error) {
 	commiters := make(map[string]*outcomeProxyBuilder)
 	implementations := make(map[*topoRunner]string)
 
 	//first pass is to establish all the names and do things that don't involve
 	//complex deps of any kind
-	for _, n := range c.Topologies {
-		if err := c.checkExistingName(n.Name, false); err != nil {
+	for _, n := range entries {
+		if err := c.checkExistingTopologyName(tname, n.Name); err != nil {
 			return nil, err
 		}
 		w, err := c.newTopoRunner(n)
 		if err != nil {
 			return nil, err
 		}
+
+		//datastructures for later
 		trimmedIn := strings.Trim(n.RunIn, " \n")
 		implementations[w] = trimmedIn
-
-		c.nameToTopo[strings.Trim(n.Name, " \n")] = topoInfo{
+		trimmedName := strings.Trim(n.Name, " \n")
+		c.nameToTopology[tname][trimmedName] = &topoInfo{
 			runner:    w,
 			instances: n.Instances,
 		}
@@ -239,14 +250,14 @@ func (c *Config) checkTopologyNodes() (map[*topoRunner]string, error) {
 	}
 	//second pass is to handle the possibility that network nodes reference
 	//each other in the consumes section of the declaration
-	for _, net := range c.Topologies {
-		info := c.nameToTopo[strings.Trim(net.Name, " \n")]
+	for _, net := range entries {
+		info := c.nameToTopology[tname][strings.Trim(net.Name, " \n")]
 		n := info.runner.(*topoRunner)
 		for _, in := range net.Consumes {
 			trimmed := strings.Trim(in, " \n")
-			other, ok := c.nameToTopo[trimmed]
+			other, ok := c.nameToTopology[tname][trimmed]
 			if !ok {
-				return nil, fmt.Errorf("can't find other topo node named %s for %s", in, n.name())
+				return nil, fmt.Errorf("can't find other topo node named %s for %s (in %s)", in, n.name(), tname)
 			}
 			if other.instances > 1 {
 				return nil, fmt.Errorf("can't consume topo node %s, because there are multiple instances (%d) of it (in %s)",
@@ -262,7 +273,7 @@ func (c *Config) checkTopologyNodes() (map[*topoRunner]string, error) {
 //this works out to the third pass threough the network section.  this is to allow
 //allow the possibility that the networks can reference each other and can reference
 //the gobuild nodes.
-func (c *Config) dependenciesTopologyNodes(implementations map[*topoRunner]string) error {
+func (c *Config) dependenciesTopologyNodes(n string, implementations map[*topoRunner]string) error {
 	//walk the know networks
 	for n, runIn := range implementations {
 		if !c.tagExists(runIn, c.cli) {
@@ -280,7 +291,7 @@ func (c *Config) dependenciesTopologyNodes(implementations map[*topoRunner]strin
 
 //newtopoRunner creates a new topoRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
-func (c *Config) newTopoRunner(n *Topology) (*topoRunner, error) {
+func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 	exp := make(map[pickett_io.Port][]pickett_io.PortBinding)
 
 	if n.Instances > 1 && n.CommitOnExit != nil {

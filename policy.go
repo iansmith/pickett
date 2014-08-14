@@ -50,14 +50,14 @@ func defaultPolicy() policy {
 
 //formContainerKey is a helper for forming the keyname in etcd that corresponds
 //to a particular network's container.
-func formContainerKey(r runner) string {
-	return filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, r.name())
+func formContainerKey(r runner, topoName string, instance int) string {
+	return filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, topoName, r.name(), fmt.Sprint(instance))
 }
 
 //start runs the runner in its policyInput and records the docker container name into etcd.
 //note that this is the lowest level code that knows about the options to docker and etcd.
 //this code is the actual implementation of start.
-func (p *policyInput) start(teeOutput bool, image string, links map[string]string, cli io.DockerCli, etcd io.EtcdClient) error {
+func (p *policyInput) start(teeOutput bool, image string, topoName string, instance int, links map[string]string, cli io.DockerCli, etcd io.EtcdClient) error {
 
 	runConfig := &io.RunConfig{
 		Image:      image,
@@ -67,7 +67,8 @@ func (p *policyInput) start(teeOutput bool, image string, links map[string]strin
 		Ports:      p.r.exposed(),
 	}
 
-	_, contId, err := cli.CmdRun(runConfig, p.r.entryPoint()...)
+	args := append(p.r.entryPoint(), topoName, fmt.Sprint(instance))
+	_, contId, err := cli.CmdRun(runConfig, args...)
 	if err != nil {
 		return err
 	}
@@ -76,7 +77,7 @@ func (p *policyInput) start(teeOutput bool, image string, links map[string]strin
 		if err != nil {
 			return err
 		}
-		if _, err = etcd.Put(formContainerKey(p.r), insp.ContainerName()); err != nil {
+		if _, err = etcd.Put(formContainerKey(p.r, topoName, instance), insp.ContainerName()); err != nil {
 			return err
 		}
 		p.containerName = insp.ContainerName()
@@ -86,11 +87,11 @@ func (p *policyInput) start(teeOutput bool, image string, links map[string]strin
 
 // stop stops the runner in its policyInput removes the container from etcd.  This is the actual
 // implementation of stop.
-func (p *policyInput) stop(cli io.DockerCli, etcd io.EtcdClient) error {
+func (p *policyInput) stop(topoName string, instance int, cli io.DockerCli, etcd io.EtcdClient) error {
 	if err := cli.CmdStop(p.containerName); err != nil {
 		return err
 	}
-	if _, err := etcd.Del(formContainerKey(p.r)); err != nil {
+	if _, err := etcd.Del(formContainerKey(p.r, topoName, instance)); err != nil {
 		return err
 	}
 	return nil
@@ -140,7 +141,7 @@ func (p policy) String() string {
 
 //applyPolicy takes a given policy and starts or stops containers as appropriate. teeOutput is
 //really a proxy for "the user requested this be started".
-func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]string, conf *Config) error {
+func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, instance int, links map[string]string, conf *Config) error {
 
 	//STEP 0: is image OOD?
 	ood, err := in.r.imageIsOutOfDate(conf)
@@ -161,20 +162,19 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			}
 		}
 		conf.helper.Debug("policy %s, initial start of %s", p, in.r.name())
-		return in.start(teeOutput, in.r.imageName(), links, conf.cli, conf.etcd)
+		return in.start(teeOutput, in.r.imageName(), topoName, instance, links, conf.cli, conf.etcd)
 	}
-
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
 		conf.helper.Debug("policy %s, stopping %s (because its out of date)", p, in.r.name())
-		err = in.stop(conf.cli, conf.etcd)
+		err = in.stop(topoName, instance, conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
 		in.isRunning = false
 	} else if in.isRunning && p.stop == ALWAYS {
 		conf.helper.Debug("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
-		err = in.stop(conf.cli, conf.etcd)
+		err = in.stop(topoName, instance, conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 			startIt = true
 		}
 		if startIt {
-			if err := in.start(teeOutput, img, links, conf.cli, conf.etcd); err != nil {
+			if err := in.start(teeOutput, img, topoName, instance, links, conf.cli, conf.etcd); err != nil {
 				return err
 			}
 		} else {
@@ -220,8 +220,8 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, links map[string]str
 
 //createPolicyInput does the work of interrogating etcd and if necessary docker to figure
 //out the state of services.  It returns a policyInput suitable for applying policy to.
-func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
-	value, present, err := conf.etcd.Get(formContainerKey(r))
+func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*policyInput, error) {
+	value, present, err := conf.etcd.Get(formContainerKey(r, topoName, instance))
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
 			//fmt.Printf("xxx ok to ignore this error?\n")
 			conf.helper.Debug("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
-			_, err = conf.etcd.Del(formContainerKey(r))
+			_, err = conf.etcd.Del(formContainerKey(r, topoName, instance))
 			if err != nil {
 				return nil, err
 			}
