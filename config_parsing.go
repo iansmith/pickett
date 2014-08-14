@@ -20,8 +20,8 @@ func (c *Config) checkExistingName(proposed string, wantNode bool) error {
 			return fmt.Errorf("name %s already in use in this configuration (build node)", p)
 		}
 	}
-	if c.nameToNetwork[p] != nil {
-		return fmt.Errorf("network name %s already in use in this configuration", p)
+	if _, ok := c.nameToTopo[p]; ok {
+		return fmt.Errorf("topo node name %s already in use in this configuration", p)
 	}
 	return nil
 }
@@ -190,24 +190,27 @@ func contains(list []string, candidate string) bool {
 //checkNetworkNodes verifies the easy part of all the network setups in this configuration file.
 //Thes does the portion that does not have dependencies and returns the necessary
 //bookkeeping for that to be done in a later pass.
-func (c *Config) checkNetworkNodes() (map[*networkRunner]string, error) {
+func (c *Config) checkTopologyNodes() (map[*topoRunner]string, error) {
 	commiters := make(map[string]*outcomeProxyBuilder)
-	implementations := make(map[*networkRunner]string)
+	implementations := make(map[*topoRunner]string)
 
 	//first pass is to establish all the names and do things that don't involve
 	//complex deps of any kind
-	for _, n := range c.Networks {
+	for _, n := range c.Topologies {
 		if err := c.checkExistingName(n.Name, false); err != nil {
 			return nil, err
 		}
-		w, err := c.newNetworkRunner(n)
+		w, err := c.newTopoRunner(n)
 		if err != nil {
 			return nil, err
 		}
 		trimmedIn := strings.Trim(n.RunIn, " \n")
 		implementations[w] = trimmedIn
 
-		c.nameToNetwork[strings.Trim(n.Name, " \n")] = w
+		c.nameToTopo[strings.Trim(n.Name, " \n")] = topoInfo{
+			runner:    w,
+			instances: n.Instances,
+		}
 
 		//this is the way we build nodes that are really "part of" this
 		//network runner but after it completes
@@ -236,16 +239,20 @@ func (c *Config) checkNetworkNodes() (map[*networkRunner]string, error) {
 	}
 	//second pass is to handle the possibility that network nodes reference
 	//each other in the consumes section of the declaration
-	for _, net := range c.Networks {
-		simpleRunner := c.nameToNetwork[strings.Trim(net.Name, " \n")]
-		n := simpleRunner.(*networkRunner)
+	for _, net := range c.Topologies {
+		info := c.nameToTopo[strings.Trim(net.Name, " \n")]
+		n := info.runner.(*topoRunner)
 		for _, in := range net.Consumes {
 			trimmed := strings.Trim(in, " \n")
-			other, ok := c.nameToNetwork[trimmed]
+			other, ok := c.nameToTopo[trimmed]
 			if !ok {
-				return nil, fmt.Errorf("can't find other network node named %s for %s", in, n.name())
+				return nil, fmt.Errorf("can't find other topo node named %s for %s", in, n.name())
 			}
-			n.consumes = append(n.consumes, other)
+			if other.instances > 1 {
+				return nil, fmt.Errorf("can't consume topo node %s, because there are multiple instances (%d) of it (in %s)",
+					in, other.instances, n.name())
+			}
+			n.consumes = append(n.consumes, other.runner)
 		}
 	}
 
@@ -255,7 +262,7 @@ func (c *Config) checkNetworkNodes() (map[*networkRunner]string, error) {
 //this works out to the third pass threough the network section.  this is to allow
 //allow the possibility that the networks can reference each other and can reference
 //the gobuild nodes.
-func (c *Config) dependenciesNetworkNodes(implementations map[*networkRunner]string) error {
+func (c *Config) dependenciesTopologyNodes(implementations map[*topoRunner]string) error {
 	//walk the know networks
 	for n, runIn := range implementations {
 		if !c.tagExists(runIn, c.cli) {
@@ -271,10 +278,19 @@ func (c *Config) dependenciesNetworkNodes(implementations map[*networkRunner]str
 	return nil
 }
 
-//newNetworkRunner creates a new networkRunner node from the data supplied. It can fail if
+//newtopoRunner creates a new topoRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
-func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
+func (c *Config) newTopoRunner(n *Topology) (*topoRunner, error) {
 	exp := make(map[pickett_io.Port][]pickett_io.PortBinding)
+
+	if n.Instances > 1 && n.CommitOnExit != nil {
+		return nil, fmt.Errorf("can't commit on exit with multiple instances (in %s)", n.Name)
+	}
+
+	//convert zero or any negative value to 1
+	if n.Instances < 1 {
+		n.Instances = 1
+	}
 
 	//convert to the pickett_io format
 	for k, v := range n.Expose {
@@ -289,7 +305,7 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 		exp[key] = append(curr, b)
 	}
 
-	result := &networkRunner{
+	result := &topoRunner{
 		n:      n.Name,
 		expose: exp,
 	}
