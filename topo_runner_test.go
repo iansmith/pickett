@@ -33,7 +33,7 @@ var netExample = `
 			]					
 		}
 	],
-	"Networks" : [
+	"Topologies" : [
 		{
 			"Name" : "part1",
 			"RunIn": "netexample:part1",
@@ -183,7 +183,7 @@ func TestNetworkNodes(T *testing.T) {
 		T.Fatalf("wrong nmuber of nodes in the chain")
 	}
 
-	if len(c.nameToNetwork) != 2 {
+	if len(c.nameToTopo) != 2 {
 		T.Fatalf("wrong nmuber of nodes in the chain")
 	}
 

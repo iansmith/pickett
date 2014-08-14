@@ -52,7 +52,7 @@ type Extraction struct {
 	Artifacts  []*Artifact
 }
 
-type Network struct {
+type Topology struct {
 	Name         string
 	RunIn        string
 	EntryPoint   []string
@@ -60,11 +60,17 @@ type Network struct {
 	Policy       string
 	Expose       map[string]int
 	CommitOnExit map[string]string
+	Instances    int
 }
 
 type BuildOpts struct {
 	DontUseCache    bool
 	RemoveContainer bool
+}
+
+type topoInfo struct {
+	runner    runner
+	instances int
 }
 
 type Config struct {
@@ -74,15 +80,15 @@ type Config struct {
 	GoBuilds           []*GoBuild
 	Extractions        []*Extraction
 	GenericBuilds      []*GenericBuild
-	Networks           []*Network
+	Topologies         []*Topology
 
 	//internal objects
-	nameToNode    map[string]node
-	nameToNetwork map[string]runner
-	helper        pickett_io.Helper
-	cli           pickett_io.DockerCli
-	etcd          pickett_io.EtcdClient
-	vbox          pickett_io.VirtualBox
+	nameToNode map[string]node
+	nameToTopo map[string]topoInfo
+	helper     pickett_io.Helper
+	cli        pickett_io.DockerCli
+	etcd       pickett_io.EtcdClient
+	vbox       pickett_io.VirtualBox
 }
 
 // NewCofingFile creates a new instance of configuration, including
@@ -121,7 +127,7 @@ func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.Docker
 	//these are the two key OUTPUT datastructures when we are done with
 	//all the parsing parts
 	conf.nameToNode = make(map[string]node)
-	conf.nameToNetwork = make(map[string]runner)
+	conf.nameToTopo = make(map[string]topoInfo)
 
 	// PART 1: containers cannot reference anything other than containers,
 	// PART 1: so we can just process them
@@ -137,7 +143,7 @@ func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.Docker
 	if err != nil {
 		return nil, err
 	}
-	netImpl, err := conf.checkNetworkNodes()
+	netImpl, err := conf.checkTopologyNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +157,7 @@ func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.Docker
 	if err := conf.dependenciesGoBuildNodes(goImpl); err != nil {
 		return nil, err
 	}
-	if err := conf.dependenciesNetworkNodes(netImpl); err != nil {
+	if err := conf.dependenciesTopologyNodes(netImpl); err != nil {
 		return nil, err
 	}
 	if err := conf.dependenciesExtractNodes(extractImpl); err != nil {
@@ -169,7 +175,7 @@ func (c *Config) EntryPoints() ([]string, []string) {
 	for k, _ := range c.nameToNode {
 		r1 = append(r1, k)
 	}
-	for k, _ := range c.nameToNetwork {
+	for k, _ := range c.nameToTopo {
 		r2 = append(r2, k)
 	}
 	return r1, r2
@@ -194,12 +200,17 @@ func (c *Config) Build(name string) error {
 
 // Execute is called by the "main()" of the pickett program to run a "target".
 func (c *Config) Execute(name string) error {
-	net, isPresent := c.nameToNetwork[strings.Trim(name, " \n")]
+	info, isPresent := c.nameToTopo[strings.Trim(name, " \n")]
 	if !isPresent {
 		return fmt.Errorf("no such target for build or run: %s", name)
 	}
-	_, err := net.run(true, c)
-	return err
+	for i := 0; i < info.instances; i++ {
+		_, err := info.runner.run(true, c, 0)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Config) codeVolumes() (map[string]string, error) {
