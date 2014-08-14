@@ -56,24 +56,24 @@ func (n *topoRunner) imageName() string {
 // run actually does the work to launch this network ,including launching all the networks
 // that this one depends on (consumes).  Note that behavior of starting or stopping
 // particular dependent services is controllled through the policy apparatus.
-func (n *topoRunner) run(teeOutput bool, conf *Config, instance int) (*policyInput, error) {
-	links := make(map[string]string)
+func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance int) (*policyInput, error) {
 
+	links := make(map[string]string)
 	for _, r := range n.consumes {
-		conf.helper.Debug("launching %s because %s consumes it (only one instance)", r.name(), n.name())
-		input, err := r.run(false, conf, 0)
+		conf.helper.Debug("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
+		input, err := r.run(false, conf, topoName, 0)
 		if err != nil {
 			return nil, err
 		}
 		links[input.containerName] = input.r.name()
 	}
 
-	in, err := createPolicyInput(n, conf)
+	in, err := createPolicyInput(n, topoName, instance, conf)
 	if err != nil {
 		return nil, err
 	}
 	n.containerName = in.containerName //for use in destroy
-	return in, n.policy.appyPolicy(teeOutput, in, links, conf)
+	return in, n.policy.appyPolicy(teeOutput, in, topoName, instance, links, conf)
 }
 
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
@@ -121,7 +121,9 @@ func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
 		return time.Time{}, err
 	}
 	conf.helper.Debug("using run node %s to build", o.net.name())
-	in, err := o.net.run(true, conf, 0)
+
+	//this is starting to look dodgier and dodgier
+	in, err := o.net.run(true, conf, "pickett-build", 0)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -146,18 +148,4 @@ func (o *outcomeProxyBuilder) in() []node {
 
 func (o *outcomeProxyBuilder) tag() string {
 	return o.repository + ":" + o.tagname
-}
-
-func (n *topoRunner) destroy(config *Config) error {
-	//note that this condition ends up false in the case where we BLOCKED on the outcome of the container
-	//thus we never needed to store it's container name in etcd
-	if n.containerName != "" {
-		if _, err := config.etcd.Del(formContainerKey(n)); err != nil {
-			return err
-		}
-		if err := config.cli.CmdStop(n.containerName); err != nil {
-			return err
-		}
-	}
-	return nil
 }

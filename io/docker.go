@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsouza/go-dockerclient"
@@ -160,6 +161,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	config.Cmd = s
 	config.Image = runconf.Image
 
+	fordebug := new(bytes.Buffer)
+	fordebug.WriteString("docker run ")
 	cont, err := d.createNamedContainer(config)
 	if err != nil {
 		return nil, "", err
@@ -170,11 +173,13 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	flatLinks := []string{}
 	for k, v := range runconf.Links {
 		flatLinks = append(flatLinks, fmt.Sprintf("%s:%s", k, v))
+		fordebug.WriteString(fmt.Sprintf("-link %s:%s ", k, v))
 	}
 	host.Links = flatLinks
 	host.Binds = []string{}
 	for k, v := range runconf.Volumes {
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
+		fordebug.WriteString(fmt.Sprintf("-v %s:%s ", k, v))
 	}
 
 	//convert the types of the elements of this map so that *our* clients don't
@@ -186,12 +191,15 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		for _, m := range v {
 			convertedMap[key] = append(convertedMap[key],
 				docker.PortBinding{HostIp: m.HostIp, HostPort: m.HostPort})
+			fordebug.WriteString(fmt.Sprintf("-p %s:%s:%s ", m.HostIp, m.HostPort, m.HostPort))
 		}
 	}
 	host.PortBindings = convertedMap
 
 	if d.showDocker {
-		fmt.Printf("[docker cmd] Starting container %s . %v\n", cont.ID, host)
+		cmd := strings.Trim(fmt.Sprint(s), "[]")
+		fmt.Printf("[docker cmd] %s %s %s (in container %s)\n", fordebug.String(),
+			config.Image, cmd, cont.ID)
 	}
 
 	err = d.client.StartContainer(cont.ID, host)
@@ -250,7 +258,6 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	fmt.Printf("TRYING TO STOP CONTAINER %s\n", contID)
 	return d.client.StopContainer(contID, 10)
 }
 
@@ -586,6 +593,7 @@ func (c *dockerCli) InspectImage(n string) (InspectedImage, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &imageInspect{
 		wrapped: i,
 	}, nil
