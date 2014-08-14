@@ -99,7 +99,6 @@ func (e *extractionBuilder) getSourceExtractions(conf *Config) (time.Time, map[s
 	volumes := make(map[string]string)
 	for _, cv := range conf.CodeVolumes {
 		dir := conf.helper.DirectoryRelative(cv.Directory)
-		fmt.Printf("Dir %s Mounted at %v", dir, cv)
 		volumes[dir] = cv.MountedAt
 	}
 
