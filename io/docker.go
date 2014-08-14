@@ -191,7 +191,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	host.PortBindings = convertedMap
 
 	if d.showDocker {
-		fmt.Printf("[docker cmd] Starting container %s . %v\n", cont.ID, host)
+		fmt.Printf("[docker cmd] Starting container %s (%s). Binds: %v . Ports: %v\n",
+			cont.Name, cont.ID, host.Binds, host.PortBindings)
 	}
 
 	err = d.client.StartContainer(cont.ID, host)
@@ -256,6 +257,10 @@ func (d *dockerCli) CmdStop(contID string) error {
 
 func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
 
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Tagging image %s as %s:%s\n", image, info.Repository, info.Tag)
+	}
+
 	return d.client.TagImage(image, docker.TagImageOptions{
 		Force: force,
 		Tag:   info.Tag,
@@ -272,14 +277,15 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 		opts.Repository = info.Repository
 	}
 
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, %Repo: %s\n", opts.Container, opts.Tag, opts.Repository)
-	}
-
 	image, err := d.client.CommitContainer(opts)
 	if err != nil {
 		return "", err
 	}
+
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Commit of container %s AS image %s\n", opts.Container, image.ID)
+	}
+
 	return image.ID, nil
 }
 
