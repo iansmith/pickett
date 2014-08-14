@@ -190,6 +190,7 @@ func (c *Config) EntryPoints() ([]string, []string) {
 			r2 = append(r2, k+"."+n)
 		}
 	}
+	fmt.Printf("entry points: %+v, %+v\n", r1, r2)
 	return r1, r2
 }
 
@@ -220,7 +221,6 @@ func (c *Config) Execute(name string) error {
 	if !isPresent {
 		return fmt.Errorf("no such target for run: '%s'", pair[0])
 	}
-
 	var info *topoInfo
 
 	for key, value := range tmap {
