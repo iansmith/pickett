@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/igneous-systems/pickett/io"
@@ -60,7 +59,7 @@ func (n *networkRunner) run(teeOutput bool, conf *Config) (*policyInput, error) 
 	links := make(map[string]string)
 
 	for _, r := range n.consumes {
-		conf.helper.Debug("launching %s because %s consumes it", r.name(), n.name())
+		flog.Debugf("launching %s because %s consumes it", r.name(), n.name())
 		input, err := r.run(false, conf)
 		if err != nil {
 			return nil, err
@@ -79,7 +78,7 @@ func (n *networkRunner) run(teeOutput bool, conf *Config) (*policyInput, error) 
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
 func (n *networkRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 	if !n.runIn.isNode {
-		conf.helper.Debug("'%s' can't be out of date, image '%s' is not buildable\n", n.name(), n.runIn.name)
+		flog.Debugf("'%s' can't be out of date, image '%s' is not buildable", n.name(), n.runIn.name)
 		return false, nil
 	}
 	return n.runIn.node.isOutOfDate(conf)
@@ -88,7 +87,7 @@ func (n *networkRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 // we build the image if indeed that is possible
 func (n *networkRunner) imageBuild(conf *Config) error {
 	if !n.runIn.isNode {
-		fmt.Printf("[pickett WARNING] '%s' can't be built, image '%s' is not buildable\n", n.name(), n.runIn.name)
+		flog.Warningf("'%s' can't be built, image '%s' is not buildable", n.name(), n.runIn.name)
 		return nil
 	}
 	return n.runIn.node.build(conf)

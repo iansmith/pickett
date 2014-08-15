@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"fmt"
 	"github.com/igneous-systems/pickett/io"
 	"time"
 )
@@ -26,7 +25,6 @@ func (c *containerBuilder) tag() string {
 func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
 	interesting, err := cli.InspectImage(tag)
 	if err != nil {
-		//fmt.Printf("xxx is it ok to ignore this error on inspect %s?\n", tag)
 		return time.Time{}, nil
 	}
 	return interesting.CreatedTime(), nil
@@ -39,9 +37,9 @@ func (d *containerBuilder) setTimestampOnImage(helper io.Helper, cli io.DockerCl
 		return err
 	}
 	if t.IsZero() {
-		helper.Debug("setTimestampOnImage %s: doesn't exist", d.tag())
+		flog.Debugf("setTimestampOnImage %s: doesn't exist", d.tag())
 	} else {
-		helper.Debug("setTimestampOnImage %s to be %v", d.tag(), t)
+		flog.Debugf("setTimestampOnImage %s to be %v", d.tag(), t)
 	}
 	d.imgTime = t
 	return nil
@@ -54,7 +52,7 @@ func (d *containerBuilder) setLastTimeOnDirectoryEntry(helper io.Helper) error {
 	if err != nil {
 		return err
 	}
-	helper.Debug("setLastTimeOnDirectoryEntry(%s) to be %v", d.dir, last)
+	flog.Debugf("setLastTimeOnDirectoryEntry(%s) to be %v", d.dir, last)
 	d.dirTime = last
 	return nil
 }
@@ -73,11 +71,11 @@ func (d *containerBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	if d.dirTime.After(d.imgTime) {
-		fmt.Printf("[pickett] '%s' needs to be rebuilt, source directory %s is newer.\n", d.tag(), d.dir)
+		flog.Infof("'%s' needs to be rebuilt, source directory %s is newer.", d.tag(), d.dir)
 		return time.Time{}, true, nil
 	}
 
-	fmt.Printf("[pickett] '%s' is up to date with respect to its build directory.\n", d.tag())
+	flog.Infof("'%s' is up to date with respect to its build directory.", d.tag())
 	return d.imgTime, false, nil
 }
 
@@ -90,7 +88,7 @@ func (d *containerBuilder) build(config *Config) (time.Time, error) {
 		RemoveTemporaryContainer: config.DockerBuildOptions.RemoveContainer,
 	}
 	dirName := config.helper.DirectoryRelative(d.dir)
-	fmt.Printf("[pickett] Building tarball in %s\n", d.dir)
+	flog.Infof("Building tarball in %s", d.dir)
 
 	//now can send it to the server
 	err := config.cli.CmdBuild(opts, dirName, d.tag())

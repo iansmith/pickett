@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"logit"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/igneous-systems/pickett"
 	"github.com/igneous-systems/pickett/io"
@@ -19,28 +21,34 @@ func contains(s []string, target string) bool {
 	return false
 }
 
-func makeIOObjects(debug, showDocker bool, path string) (io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox) {
-	helper, err := io.NewHelper(path, debug)
+func makeIOObjects(path string) (io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox, error) {
+	helper, err := io.NewHelper(path)
 	if err != nil {
-		//no helper, so can't call CheckFatal()
-		fmt.Fprintf(os.Stderr, "[pickett] can't read %s: %v\n", path, err)
-		os.Exit(1)
+		return nil, nil, nil, nil, fmt.Errorf("can't read %s: %v", path, err)
 	}
-	cli, err := io.NewDockerCli(debug, showDocker)
-	helper.CheckFatal(err, "failed to connect to docker server, maybe its not running? %v")
-	etcd, err := io.NewEtcdClient(debug)
-	helper.CheckFatal(err, "failed to connect to etcd, maybe its not running? %v")
-	vbox, err := io.NewVirtualBox(debug)
-	helper.CheckFatal(err, "failed to run vboxmanage: %v")
-	return helper, cli, etcd, vbox
+	cli, err := io.NewDockerCli()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to connect to docker server, maybe its not running? %v", err)
+	}
+	etcd, err := io.NewEtcdClient()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to connect to etcd, maybe its not running? %v", err)
+	}
+	vbox, err := io.NewVirtualBox()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to run vboxmanage: %v", err)
+	}
+	return helper, cli, etcd, vbox, nil
 }
 
 // trueMain is the entry point of the program with the targets filled in
 // and a working helper.
-func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) {
+func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) error {
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, cli, etcd, vbox)
-	helper.CheckFatal(err, "can't understand config file %s: %v", helper.ConfigFile())
+	if err != nil {
+		return fmt.Errorf("can't understand config file %s: %v", helper.ConfigFile(), err)
+	}
 	buildables, runnables := config.EntryPoints()
 	run := false
 	runTarget := ""
@@ -57,15 +65,13 @@ func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.Etcd
 			}
 			if contains(runnables, t) {
 				if run {
-					fmt.Fprintf(os.Stderr, "[pickett] can only run one target (%s and %s both runnable)\n", runTarget, t)
-					os.Exit(1)
+					return fmt.Errorf("can only run one target (%s and %s both runnable)", runTarget, t)
 				}
 				run = true
 				runTarget = t
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "[pickett] don't know anything about target %s\n", t)
-			os.Exit(1)
+			return fmt.Errorf("don't know anything about target %s", t)
 		}
 	}
 	for _, target := range targets {
@@ -73,30 +79,56 @@ func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.Etcd
 			continue
 		}
 		err := config.Build(target)
-		helper.CheckFatal(err, "%s: %v", target)
+		if err != nil {
+			return fmt.Errorf("an error occurred while building target '%v': %v", target, err)
+		}
 	}
 	if runTarget != "" {
 		err = config.Execute(runTarget)
-		helper.CheckFatal(err, "%s: %v", runTarget)
+		if err != nil {
+			return fmt.Errorf("an error occurred while running target '%v': %v", runTarget, err)
+		}
 	}
+	return nil
 }
+
+var flog = logit.NewNestedLoggerFromCaller(logit.Global)
 
 func main() {
 	var debug bool
-	var showDocker bool
 	var configFile string
 
-	flag.BoolVar(&debug, "debug", false, "turns off verbose logging for pickett developers")
-	flag.BoolVar(&showDocker, "showdocker", false, "turns on tracing of docker commands issued")
+	flag.BoolVar(&debug, "debug", false, "turns on verbose logging for pickett developers")
 	flag.StringVar(&configFile, "config", "Pickett.json", "use a custom pickett configuration file")
 	flag.Parse()
 
+	var logFilterLvl logit.Level
+	if debug {
+		logFilterLvl = logit.DEBUG
+	} else {
+		logFilterLvl = logit.INFO
+	}
+	logit.Global.ModifyFilterLvl("stdout", logFilterLvl, nil, nil)
+
 	wd, err := os.Getwd()
 	if err != nil {
-		panic("cant get working directory!")
+		panic("can't get working directory!")
 	}
 
-	helper, docker, etcd, vbox := makeIOObjects(debug, showDocker, filepath.Join(wd, configFile))
-	trueMain(flag.Args(), helper, docker, etcd, vbox)
-	os.Exit(0)
+	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
+	if err != nil {
+		flog.Errorf("failed to make IO objects: %v", err)
+	} else {
+		err = trueMain(flag.Args(), helper, docker, etcd, vbox)
+		if err != nil {
+			flog.Errorln(err)
+		}
+	}
+
+	logit.Flush(time.Millisecond * 300)
+	if err != nil {
+		os.Exit(1)
+	} else {
+		os.Exit(0)
+	}
 }
