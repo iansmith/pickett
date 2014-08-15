@@ -63,12 +63,20 @@ type DockerCli interface {
 	CmdCopy(map[string]string, string, string, []*CopyArtifact, string) error
 	CmdLastModTime(map[string]string, string, []*CopyArtifact) (time.Time, error)
 	CmdStop(string) error
+	CmdRmContainer(string) error
+	CmdRmImage(string) error
+	TargetsStatus([]string) string
+	TargetsStop([]string)
+	TargetsDrop([]string)
+	TargetsWipe([]string)
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
 }
 
 type InspectedImage interface {
 	CreatedTime() time.Time
+	ID() string
+	ContainerID() string
 }
 
 type InspectedContainer interface {
@@ -253,6 +261,19 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 func (d *dockerCli) CmdStop(contID string) error {
 	fmt.Printf("TRYING TO STOP CONTAINER %s\n", contID)
 	return d.client.StopContainer(contID, 10)
+}
+
+func (d *dockerCli) CmdRmImage(imgID string) error {
+	fmt.Printf("TRYING TO REMOVE IMAGE %s\n", imgID)
+	return d.client.RemoveImage(imgID)
+}
+
+func (d *dockerCli) CmdRmContainer(contID string) error {
+	fmt.Printf("TRYING TO REMOVE CONTAINER %s\n", contID)
+	opts := docker.RemoveContainerOptions{
+		ID: contID,
+	}
+	return d.client.RemoveContainer(opts)
 }
 
 func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
@@ -607,9 +628,114 @@ func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
 	}, nil
 }
 
+// TargetsStatus returns a text report of the given targets
+func (c *dockerCli) TargetsStatus(targets []string) string {
+	timeFormat := "01/02/06-03:04PM"
+	containers := c.targetsContainers(targets)
+	images := c.targetsImages(targets)
+	info := fmt.Sprintf("%-25s | %-31s | %-31s - %-28s - Ports\n", "Target", "Image", "Container", "Status")
+	for _, target := range targets {
+		img, found := images[target]
+		if !found {
+			info += fmt.Sprintf("%-25s | No Image found                  | ", target)
+		} else {
+			ts := time.Unix(img.Created, 0).Format(timeFormat)
+			info += fmt.Sprintf("%-25s | %s (%s) | ", target, img.ID[:12], ts)
+		}
+		cont, found := containers[target]
+		if !found {
+			info += "No container found.\n"
+		} else {
+			ts := time.Unix(cont.Created, 0).Format(timeFormat)
+			ports := []int64{}
+			for _, p := range cont.Ports {
+				ports = append(ports, p.PrivatePort)
+			}
+			info += fmt.Sprintf("%s (%s) - %-28s - %v\n", cont.ID[:12], ts, cont.Status, ports)
+		}
+	}
+	return info
+}
+
+func (c *dockerCli) TargetsStop(targets []string) {
+	containers := c.targetsContainers(targets)
+	for _, t := range targets {
+		if con, ok := containers[t]; ok {
+			err := c.CmdStop(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+func (c *dockerCli) TargetsDrop(targets []string) {
+	containers := c.targetsContainers(targets)
+	for _, t := range targets {
+		if con, ok := containers[t]; ok {
+			err := c.CmdStop(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+			err = c.CmdRmContainer(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+func (c *dockerCli) TargetsWipe(targets []string) {
+	c.TargetsDrop(targets)
+	images := c.targetsImages(targets)
+	for _, t := range targets {
+		if i, ok := images[t]; ok {
+			err := c.CmdRmImage(i.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+// targetsContainers returns containers matching the target names, keyed by target name
+func (c *dockerCli) targetsContainers(targets []string) map[string]docker.APIContainers {
+	opts := docker.ListContainersOptions{
+		All: true,
+	}
+	ctns, _ := c.client.ListContainers(opts)
+	containers := map[string]docker.APIContainers{}
+	for _, c := range ctns {
+		if contains(targets, c.Image) {
+			containers[c.Image] = c
+		}
+	}
+	return containers
+}
+
+// targetsImages returns images matching the target names, keyed by target name
+func (c *dockerCli) targetsImages(targets []string) map[string]docker.APIImages {
+	imgs, _ := c.client.ListImages(true)
+	images := map[string]docker.APIImages{}
+	for _, c := range imgs {
+		if len(c.RepoTags) > 0 && contains(targets, c.RepoTags[0]) {
+			images[c.RepoTags[0]] = c
+		}
+	}
+	return images
+}
+
 //Wrappers for getting inspections
 func (i *imageInspect) CreatedTime() time.Time {
 	return i.wrapped.Created
+}
+
+func (i *imageInspect) ID() string {
+	return i.wrapped.ID
+}
+
+func (i *imageInspect) ContainerID() string {
+	return i.wrapped.Container
 }
 
 func (c *contInspect) CreatedTime() time.Time {

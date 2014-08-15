@@ -35,52 +35,6 @@ func makeIOObjects(debug, showDocker bool, path string) (io.Helper, io.DockerCli
 	return helper, cli, etcd, vbox
 }
 
-// trueMain is the entry point of the program with the targets filled in
-// and a working helper.
-func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) {
-	reader := helper.ConfigReader()
-	config, err := pickett.NewConfig(reader, helper, cli, etcd, vbox)
-	helper.CheckFatal(err, "can't understand config file %s: %v", helper.ConfigFile())
-	buildables, runnables := config.EntryPoints()
-	run := false
-	runTarget := ""
-
-	// if you don't tell us what to build, we build everything with no outgoing
-	// edges, the "root" of a backchain
-	if len(targets) == 0 {
-		targets = buildables
-	} else {
-		//if you do tell us, we need know if it's runnable
-		for _, t := range targets {
-			if contains(buildables, t) {
-				continue
-			}
-			if contains(runnables, t) {
-				if run {
-					fmt.Fprintf(os.Stderr, "[pickett] can only run one target (%s and %s both runnable)\n", runTarget, t)
-					os.Exit(1)
-				}
-				run = true
-				runTarget = t
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[pickett] don't know anything about target %s\n", t)
-			os.Exit(1)
-		}
-	}
-	for _, target := range targets {
-		if target == runTarget {
-			continue
-		}
-		err := config.Build(target)
-		helper.CheckFatal(err, "%s: %v", target)
-	}
-	if runTarget != "" {
-		err = config.Execute(runTarget)
-		helper.CheckFatal(err, "%s: %v", runTarget)
-	}
-}
-
 func main() {
 	var debug bool
 	var showDocker bool
@@ -91,12 +45,47 @@ func main() {
 	flag.StringVar(&configFile, "config", "Pickett.json", "use a custom pickett configuration file")
 	flag.Parse()
 
+	args := flag.Args()
+	if len(args) == 0 {
+		usage()
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		panic("cant get working directory!")
 	}
 
 	helper, docker, etcd, vbox := makeIOObjects(debug, showDocker, filepath.Join(wd, configFile))
-	trueMain(flag.Args(), helper, docker, etcd, vbox)
+	reader := helper.ConfigReader()
+	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
+	helper.CheckFatal(err, "can't understand config file %s: %v", helper.ConfigFile())
+
+	switch args[0] {
+	case "run":
+		pickett.CmdRun(args[1:], config)
+	case "status":
+		pickett.CmdStatus(config)
+	case "stop":
+		pickett.CmdStop(args[1:], config)
+	case "drop":
+		pickett.CmdDrop(args[1:], config)
+	case "wipe":
+		pickett.CmdWipe(args[1:], config)
+	default:
+		usage()
+	}
+
 	os.Exit(0)
+}
+
+func usage() {
+	// There doesn't seem to be a better way to mix flags usage with arguments usage ?
+	error := fmt.Errorf(`Usage of pickett, expected an action as the first argument, one of:
+		- run [tags]      Runs all or a a specific tagged target(s). 
+		- status          Shows the status of all the known tagged targets. 
+		- stop [tags]     Stop all or a specific tagged target(s). 
+		- drop [tags]     Stop and delete all or a specific tagged target(s). 
+		- wipe [tags]     Stop and delete all or a specific tagged target(s) container(s) and images(s).`)
+	fmt.Print(error)
+	os.Exit(1)
 }

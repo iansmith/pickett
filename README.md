@@ -55,7 +55,7 @@ cd $GOPATH/src/github.com/igneous-systems
 git clone https://github.com/igneous-systems/pickett-samples
 export DOCKER_HOST="tcp://localhost:2375"
 cd $GOPATH/src/github.com/igneous-systems/pickett-samples/sample1
-pickett weather-client
+pickett run weather-client
 ```
 
 The file to examine is the `Pickett.json`.
@@ -69,7 +69,7 @@ Assuming you
 * Are willing to wait, this takes several minutes the first time
 ```
 cd /tmp/foo/pickett-samples/sample1/
-pickett --debug candidate
+pickett --debug run candidate
 ```
 That will take a while (minutes) the first time because it creates some docker images that require downloading a lot of software (`apt-get install blah blah`).  Once in steady state, pickett does incremental builds.  
 
@@ -88,7 +88,7 @@ In the former of those commands you'll see "sample1/runner", "sample1/builder", 
 
 For giggles, you may want to to try:
 ```
-time pickett candidate
+time pickett run candidate
 ```
 
 That shows you the elapsed time to *just* do the dependency checking (the pickett overhead).
