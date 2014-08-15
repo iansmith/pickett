@@ -206,8 +206,7 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 
 	if d.showDocker {
 		cmd := strings.Trim(fmt.Sprint(s), "[]")
-		fmt.Printf("[docker cmd] %s %s %s (in container %s)\n", fordebug.String(),
-			config.Image, cmd, cont.ID)
+		fmt.Printf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
 	}
 
 	err = d.client.StartContainer(cont.ID, host)
