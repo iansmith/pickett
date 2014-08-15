@@ -234,7 +234,6 @@ func createPolicyInput(r runner, conf *Config) (*policyInput, error) {
 	if present {
 		insp, err := conf.cli.InspectContainer(value)
 		if err != nil {
-			//flog.Errorf("xxx ok to ignore this error?: %v", err)
 			flog.Debugf("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
 			_, err = conf.etcd.Del(formContainerKey(r))

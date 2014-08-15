@@ -43,7 +43,6 @@ type helper struct {
 // OpenDockerfileRelative returns a reader connected to the Dockerfile
 // requsted in dir (relative to the Pickett.json) or an error.
 func (i *helper) OpenDockerfileRelative(dir string) (io.Reader, error) {
-	//flog.Debugf("OpenDockerfileRelative(%s)-->%s", dir, filepath.Join(i.DirectoryRelative(dir), "Dockerfile"))
 	return os.Open(filepath.Join(i.DirectoryRelative(dir), "Dockerfile"))
 }
 
@@ -51,20 +50,17 @@ func (i *helper) OpenDockerfileRelative(dir string) (io.Reader, error) {
 // configuration file.
 func (i *helper) OpenFileRelative(path string) (*os.File, error) {
 	dir := filepath.Dir(path)
-	//flog.Debugf("OpenFileRelative(%s)-->%s", path, filepath.Join(i.DirectoryRelative(dir), filepath.Base(path)))
 	return os.Open(filepath.Join(i.DirectoryRelative(dir), filepath.Base(path)))
 }
 
 // Return the true directory of a given directory that is relative to the
 // pickett config file.
 func (i *helper) DirectoryRelative(dir string) string {
-	//flog.Debugf("DirectoryRelative(%s)-->%s", dir, filepath.Clean(filepath.Join(i.pickettDir, dir)))
 	return filepath.Clean(filepath.Join(i.pickettDir, dir))
 }
 
 // Return a reader hooked to the configuration file we were initial
 func (i *helper) ConfigReader() io.Reader {
-	//flog.Debugf("ConfigReader trying to read %s", i.confFile)
 	rd, err := os.Open(i.confFile)
 	//we checked this on creation, so should not fail
 	if err != nil {
