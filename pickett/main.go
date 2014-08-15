@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"logit"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/igneous-systems/logit"
 	"github.com/igneous-systems/pickett"
 	"github.com/igneous-systems/pickett/io"
 )
