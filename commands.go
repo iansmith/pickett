@@ -62,7 +62,7 @@ func CmdStop(targets []string, config *Config) {
 	config.cli.TargetsStop(targets)
 }
 
-// CmdDrop stops tnd removes the targets containers
+// CmdDrop stops and removes the targets containers
 func CmdDrop(targets []string, config *Config) {
 	if len(targets) == 0 {
 		targets = confTargets(config)

@@ -259,17 +259,17 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	fmt.Printf("TRYING TO STOP CONTAINER %s\n", contID)
+	fmt.Printf("Stopping container : %s\n", contID)
 	return d.client.StopContainer(contID, 10)
 }
 
 func (d *dockerCli) CmdRmImage(imgID string) error {
-	fmt.Printf("TRYING TO REMOVE IMAGE %s\n", imgID)
+	fmt.Printf("Removing image : %s\n", imgID)
 	return d.client.RemoveImage(imgID)
 }
 
 func (d *dockerCli) CmdRmContainer(contID string) error {
-	fmt.Printf("TRYING TO REMOVE CONTAINER %s\n", contID)
+	fmt.Printf("Removing container : %s\n", contID)
 	opts := docker.RemoveContainerOptions{
 		ID: contID,
 	}
@@ -644,7 +644,7 @@ func (c *dockerCli) TargetsStatus(targets []string) string {
 		}
 		cont, found := containers[target]
 		if !found {
-			info += "No container found.\n"
+			info += "No container found\n"
 		} else {
 			ts := time.Unix(cont.Created, 0).Format(timeFormat)
 			ports := []int64{}
@@ -661,6 +661,7 @@ func (c *dockerCli) TargetsStop(targets []string) {
 	containers := c.targetsContainers(targets)
 	for _, t := range targets {
 		if con, ok := containers[t]; ok {
+			fmt.Println(t)
 			err := c.CmdStop(con.ID)
 			if err != nil {
 				fmt.Print(err)
@@ -673,6 +674,7 @@ func (c *dockerCli) TargetsDrop(targets []string) {
 	containers := c.targetsContainers(targets)
 	for _, t := range targets {
 		if con, ok := containers[t]; ok {
+			fmt.Println(t)
 			err := c.CmdStop(con.ID)
 			if err != nil {
 				fmt.Print(err)
@@ -690,6 +692,7 @@ func (c *dockerCli) TargetsWipe(targets []string) {
 	images := c.targetsImages(targets)
 	for _, t := range targets {
 		if i, ok := images[t]; ok {
+			fmt.Println(t)
 			err := c.CmdRmImage(i.ID)
 			if err != nil {
 				fmt.Print(err)
