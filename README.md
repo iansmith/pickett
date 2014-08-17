@@ -25,10 +25,6 @@ cd pickett
 cd pickett
 godep restore
 
-# get logit manually because the package name is not compatible with godep
-cd $GOPATH/src
-git clone https://github.com/igneous-systems/logit
-
 # build pickett and install it in $GOPATH/bin
 go install github.com/igneous-systems/pickett/pickett
 ```

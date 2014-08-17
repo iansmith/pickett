@@ -1,7 +1,7 @@
 package io
 
 import (
-	"logit"
+	"github.com/igneous-systems/logit"
 )
 
 var flog = logit.NewNestedLoggerFromCaller(logit.Global)

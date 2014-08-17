@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"logit"
+	"github.com/igneous-systems/logit"
 	"os"
 	"path/filepath"
 	"time"
