@@ -319,6 +319,8 @@ func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 	result := &topoRunner{
 		n:      n.Name,
 		expose: exp,
+		devs:   n.Devices,
+		priv:   n.Privileged,
 	}
 	pol := defaultPolicy()
 	switch strings.ToUpper(n.Policy) {

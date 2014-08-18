@@ -35,7 +35,9 @@ type RunConfig struct {
 	Attach     bool
 	Volumes    map[string]string
 	Ports      map[Port][]PortBinding
+	Devices    map[string]string
 	Links      map[string]string
+	Privileged bool
 	WaitOutput bool
 }
 
@@ -178,6 +180,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
 		fordebug.WriteString(fmt.Sprintf("-v %s:%s ", k, v))
 	}
+	// As far as docker is concerned a Device and a volume is the same thing so maybe it's not ncessary
+	// to separet thoase, OTH it has the benefit of clarity.
+	for k, v := range runconf.Devices {
+		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
+	}
 
 	//convert the types of the elements of this map so that *our* clients don't
 	//see the inner types
@@ -192,6 +199,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		}
 	}
 	host.PortBindings = convertedMap
+
+	host.Privileged = runconf.Privileged
 
 	cmd := strings.Trim(fmt.Sprint(s), "[]")
 	flog.Debugf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
@@ -611,7 +620,7 @@ func (c *dockerCli) TargetsStatus(targets []string) string {
 		}
 		cont, found := containers[target]
 		if !found {
-			info += "No container found.\n"
+			info += "No container found\n"
 		} else {
 			ts := time.Unix(cont.Created, 0).Format(timeFormat)
 			ports := []int64{}
@@ -628,6 +637,7 @@ func (c *dockerCli) TargetsStop(targets []string) {
 	containers := c.targetsContainers(targets)
 	for _, t := range targets {
 		if con, ok := containers[t]; ok {
+			fmt.Println(t)
 			err := c.CmdStop(con.ID)
 			if err != nil {
 				fmt.Print(err)
@@ -640,6 +650,7 @@ func (c *dockerCli) TargetsDrop(targets []string) {
 	containers := c.targetsContainers(targets)
 	for _, t := range targets {
 		if con, ok := containers[t]; ok {
+			fmt.Println(t)
 			err := c.CmdStop(con.ID)
 			if err != nil {
 				fmt.Print(err)
@@ -657,6 +668,7 @@ func (c *dockerCli) TargetsWipe(targets []string) {
 	images := c.targetsImages(targets)
 	for _, t := range targets {
 		if i, ok := images[t]; ok {
+			fmt.Println(t)
 			err := c.CmdRmImage(i.ID)
 			if err != nil {
 				fmt.Print(err)

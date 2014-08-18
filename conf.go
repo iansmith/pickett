@@ -61,6 +61,8 @@ type TopologyEntry struct {
 	Expose       map[string]int
 	CommitOnExit map[string]string
 	Instances    int
+	Devices      map[string]string
+	Privileged   bool
 }
 
 type BuildOpts struct {
