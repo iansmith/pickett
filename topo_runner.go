@@ -24,6 +24,8 @@ type topoRunner struct {
 	policy        policy
 	expose        map[io.Port][]io.PortBinding
 	containerName string
+	devs          map[string]string
+	priv          bool
 }
 
 func (n *topoRunner) name() string {
@@ -32,6 +34,14 @@ func (n *topoRunner) name() string {
 
 func (n *topoRunner) exposed() map[io.Port][]io.PortBinding {
 	return n.expose
+}
+
+func (n *topoRunner) devices() map[string]string {
+	return n.devs
+}
+
+func (n *topoRunner) privileged() bool {
+	return n.priv
 }
 
 func (n *topoRunner) entryPoint() []string {

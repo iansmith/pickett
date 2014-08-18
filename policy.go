@@ -65,6 +65,8 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 		WaitOutput: false,
 		Links:      links,
 		Ports:      p.r.exposed(),
+		Devices:    p.r.devices(),
+		Privileged: p.r.privileged(),
 	}
 
 	args := append(p.r.entryPoint(), topoName, fmt.Sprint(instance))
