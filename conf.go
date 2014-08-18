@@ -194,7 +194,6 @@ func (c *Config) EntryPoints() ([]string, []string) {
 			r2 = append(r2, k+"."+n)
 		}
 	}
-	fmt.Printf("entry points: %+v, %+v\n", r1, r2)
 	return r1, r2
 }
 

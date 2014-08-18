@@ -141,8 +141,10 @@ func main() {
 	switch args[0] {
 	case "run":
 		pickett.CmdRun(args[1:], config)
+	case "build":
+		pickett.CmdBuild(args[1:], config)
 	case "status":
-		pickett.CmdStatus(config)
+		pickett.CmdStatus(args[1:], config)
 	case "stop":
 		pickett.CmdStop(args[1:], config)
 	case "drop":
@@ -163,11 +165,12 @@ func main() {
 func usage() {
 	// There doesn't seem to be a better way to mix flags usage with arguments usage ?
 	error := fmt.Errorf(`Usage of pickett, expected an action as the first argument, one of:
-		- run [tags]      Runs all or a a specific tagged target(s). 
-		- status          Shows the status of all the known tagged targets. 
-		- stop [tags]     Stop all or a specific tagged target(s). 
-		- drop [tags]     Stop and delete all or a specific tagged target(s). 
-		- wipe [tags]     Stop and delete all or a specific tagged target(s) container(s) and images(s).`)
+- run [topology.node]             Runs a specific node in a topology, including all depedencies. 
+- status [tags or topology.node]  Shows the status of all the known buildable tags and/or runnable nodes. 
+- build [tags]                    Build all tags or specified tags. 
+- stop [topology.node]            Stop all or a specific node. 
+- drop [topology.node]            Stop and delete all or a specific node. 
+- wipe [tags]                     Delete all or specified tags (forces rebuild next time)`)
 	fmt.Print(error)
 	os.Exit(1)
 }
