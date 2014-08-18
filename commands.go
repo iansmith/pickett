@@ -40,11 +40,15 @@ func CmdRun(targets []string, config *Config) {
 			continue
 		}
 		err := config.Build(target)
-		config.helper.CheckFatal(err, "%s: %v", target)
+		if err != nil {
+			flog.Errorf("Build error %v", target)
+		}
 	}
 	if runTarget != "" {
 		err := config.Execute(runTarget)
-		config.helper.CheckFatal(err, "%s: %v", runTarget)
+		if err != nil {
+			flog.Errorf("Run error %v", runTarget)
+		}
 	}
 }
 

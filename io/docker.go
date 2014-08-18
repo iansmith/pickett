@@ -89,35 +89,28 @@ type InspectedContainer interface {
 
 //NewDocker returns a connection to the docker server.  Pickett assumes that
 //the DockerCli is "passed in from the outside".
-func NewDockerCli(debug, showDocker bool) (DockerCli, error) {
+func NewDockerCli() (DockerCli, error) {
 	if err := validateDockerHost(); err != nil {
 		return nil, err
 	}
-	return newDockerCli(debug, showDocker)
+	return newDockerCli()
 }
 
 type dockerCli struct {
-	client     *docker.Client
-	debug      bool
-	showDocker bool
+	client *docker.Client
 }
 
 // newDockerCli builds a new docker interface and returns it. It
 // assumes that the DOCKER_HOST env var has already been
 // validated.
-func newDockerCli(debug, showDocker bool) (DockerCli, error) {
-	result := &dockerCli{
-		debug:      debug,
-		showDocker: showDocker,
-	}
+func newDockerCli() (DockerCli, error) {
+	result := &dockerCli{}
 	var err error
 	result.client, err = docker.NewClient(os.Getenv("DOCKER_HOST"))
 	if err != nil {
 		return nil, err
 	}
-	if showDocker {
-		fmt.Printf("[docker cmd] export DOCKER_HOST='%s'\n", os.Getenv("DOCKER_HOST"))
-	}
+	flog.Debugf("[docker cmd] export DOCKER_HOST='%s'", os.Getenv("DOCKER_HOST"))
 	return result, nil
 }
 
@@ -130,9 +123,7 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	for tries < 3 {
 		opts.Config = config
 		opts.Name = newPhrase()
-		if d.showDocker {
-			fmt.Printf("[docker cmd] Creating container %s from image: %s\n", opts.Name, opts.Config.Image)
-		}
+		flog.Debugf("[docker cmd] Creating container %s from image: %s", opts.Name, opts.Config.Image)
 
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
@@ -150,9 +141,7 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	if !ok {
 		opts.Name = "" //fallback
 		opts.Name = newPhrase()
-		if d.showDocker {
-			fmt.Printf("[docker cmd] Creating container. Name: %s\n", opts.Name)
-		}
+		flog.Debugf("[docker cmd] Creating container. Name: %s", opts.Name)
 
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
@@ -204,10 +193,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	}
 	host.PortBindings = convertedMap
 
-	if d.showDocker {
-		cmd := strings.Trim(fmt.Sprint(s), "[]")
-		fmt.Printf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
-	}
+	cmd := strings.Trim(fmt.Sprint(s), "[]")
+	flog.Debugf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
 
 	err = d.client.StartContainer(cont.ID, host)
 	if err != nil {
@@ -217,7 +204,7 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	if runconf.Attach {
 
 		if runconf.WaitOutput {
-			fmt.Fprintf(os.Stderr, "[pickett warning] shouldn't use WaitOutput with Attach, ignoring.\n")
+			flog.Warningf("shouldn't use WaitOutput with Attach, ignoring.")
 		}
 
 		//These are the right settings if you want to "watch" the output of the command and wait for
@@ -269,12 +256,12 @@ func (d *dockerCli) CmdStop(contID string) error {
 }
 
 func (d *dockerCli) CmdRmImage(imgID string) error {
-	fmt.Printf("TRYING TO REMOVE IMAGE %s\n", imgID)
+	flog.Debugf("Removing image %s\n", imgID)
 	return d.client.RemoveImage(imgID)
 }
 
 func (d *dockerCli) CmdRmContainer(contID string) error {
-	fmt.Printf("TRYING TO REMOVE CONTAINER %s\n", contID)
+	flog.Debugf("removing container %s\n", contID)
 	opts := docker.RemoveContainerOptions{
 		ID: contID,
 	}
@@ -283,9 +270,7 @@ func (d *dockerCli) CmdRmContainer(contID string) error {
 
 func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
 
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Tagging image %s as %s:%s\n", image, info.Repository, info.Tag)
-	}
+	flog.Debugf("[docker cmd] Tagging image %s as %s:%s\n", image, info.Repository, info.Tag)
 
 	return d.client.TagImage(image, docker.TagImageOptions{
 		Force: force,
@@ -303,22 +288,18 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 		opts.Repository = info.Repository
 	}
 
+	flog.Debugf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, %Repo: %s", opts.Container, opts.Tag, opts.Repository)
+
 	image, err := d.client.CommitContainer(opts)
 	if err != nil {
 		return "", err
-	}
-
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Commit of container %s AS image %s\n", opts.Container, image.ID)
 	}
 
 	return image.ID, nil
 }
 
 func (d *dockerCli) tarball(pathToDir string, localName string, tw *tar.Writer) error {
-	if d.debug {
-		fmt.Printf("[debug] tarball construction in '%s' (as '%s')\n", pathToDir, localName)
-	}
+	flog.Debugf("tarball construction in '%s' (as '%s')", pathToDir, localName)
 	dir, err := os.Open(pathToDir)
 	if err != nil {
 		return err
@@ -383,9 +364,7 @@ func (d *dockerCli) writeFullFile(tw *tar.Writer, path string, localName string)
 	if _, err := tw.Write(content); err != nil {
 		return false, err
 	}
-	if d.debug {
-		fmt.Printf("[debug] added %s as %s to tarball\n", path, localName)
-	}
+	flog.Debugf("added %s as %s to tarball", path, localName)
 	return true, nil
 }
 
@@ -406,10 +385,8 @@ func (d *dockerCli) makeDummyContainerToGetAtImage(img string) (string, error) {
 func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 	artifacts []*CopyArtifact) (time.Time, error) {
 	if len(realPathSource) == len(artifacts) {
-		if d.debug {
-			fmt.Printf("[debug] no work to do in the container for last mod time, no artifacts inside it.\n")
-			return time.Time{}, nil
-		}
+		flog.Debugln("no work to do in the container for last mod time, no artifacts inside it.")
+		return time.Time{}, nil
 	}
 	cont, err := d.makeDummyContainerToGetAtImage(img)
 	if err != nil {
@@ -428,9 +405,7 @@ func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 		}
 		//pull it from container
 		buf := new(bytes.Buffer)
-		if d.debug {
-			fmt.Printf("[debug] Copying from container %s. Resource %s to %s\n", cont, a.SourcePath, a.DestinationDir)
-		}
+		flog.Debugf("copying from container %s. Resource %s to %s", cont, a.SourcePath, a.DestinationDir)
 
 		err = d.client.CopyFromContainer(docker.CopyFromContainerOptions{
 			OutputStream: buf,
@@ -451,9 +426,7 @@ func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 			if err != nil {
 				return time.Time{}, err
 			}
-			if d.debug {
-				fmt.Printf("[debug] read file from container: %s, %v\n", entry.Name, entry.ModTime)
-			}
+			flog.Debugf("read file from container: %s, %v", entry.Name, entry.ModTime)
 			if !entry.FileInfo().IsDir() {
 				if entry.ModTime.After(best) {
 					best = entry.ModTime
@@ -472,18 +445,14 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 	}
 
 	if len(realPathSource) != len(artifacts) {
-		if d.debug {
-			fmt.Printf("[debug] starting container because we need to retrieve artifacts from it\n")
-		}
+		flog.Debugln("starting container because we need to retrieve artifacts from it")
 		//don't bother starting the container untless there is something we need from it
 		err = d.client.StartContainer(cont, &docker.HostConfig{})
 		if err != nil {
 			return err
 		}
 	} else {
-		if d.debug {
-			fmt.Printf("[debug] all artifacts found in source tree, not starting container\n")
-		}
+		flog.Debugln("all artifacts found in source tree, not starting container")
 	}
 
 	dockerFile := new(bytes.Buffer)
@@ -502,9 +471,7 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 			}
 			//kinda hacky: we use a.SourcePath as the name *inside* the tarball so we can get the
 			//directory name right on the final output
-			if d.debug {
-				fmt.Printf("[debug] COPY %s TO %s.", a.SourcePath, a.DestinationDir)
-			}
+			flog.Debugf("COPY %s TO %s.", a.SourcePath, a.DestinationDir)
 			dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
 			if !isFile {
 				if err := d.tarball(truePath, a.SourcePath, tw); err != nil {
@@ -533,9 +500,7 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 				if err != nil {
 					return err
 				}
-				if d.debug {
-					fmt.Printf("[debug] read file from container: %s\n", entry.Name)
-				}
+				flog.Debugf("read file from container: %s", entry.Name)
 				if !entry.FileInfo().IsDir() {
 					dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", entry.Name, a.DestinationDir+"/"+entry.Name))
 					if err := tw.WriteHeader(entry); err != nil {
@@ -572,9 +537,7 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 		NoCache:        true,
 	}
 
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Building image. Name: %s\n", opts.Name)
-	}
+	flog.Debugf("[docker cmd] Building image. Name: %s", opts.Name)
 
 	if err := d.client.BuildImage(opts); err != nil {
 		return err
@@ -604,9 +567,7 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 		NoCache:        config.NoCache,
 	}
 
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Building image. Name: %s\n", opts.Name)
-	}
+	flog.Debugf("[docker cmd] Building image. Name: %s", opts.Name)
 	if err := d.client.BuildImage(opts); err != nil {
 		return err
 	}

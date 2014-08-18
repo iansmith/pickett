@@ -5,25 +5,31 @@
 Assuming you have a modern version of go already installed:
 
 ```
-# Set up GOPATH in your home directory:
+# Set up GOPATH in your home directory
 export GOPATH=$HOME/go
 mkdir -p $GOPATH/src
+
+# Add $GOPATH/bin to your path so that you can run 'pickett' directly after 'go install'
 export PATH=$PATH:$GOPATH/bin
 
-# Install pickett
+# Get the pickett code
 go get github.com/tools/godep
 mkdir -p $GOPATH/src/github.com/igneous-systems
 cd $GOPATH/src/github.com/igneous-systems
 git clone https://github.com/igneous-systems/pickett # can be replaced by your repo
 cd pickett
-# optional: you can checkout a branch here
+
+# optional: you can create and checkout a branch here
+
 # git checkout master
 cd pickett
 godep restore
+
+# build pickett and install it in $GOPATH/bin
 go install github.com/igneous-systems/pickett/pickett
 ```
 
-You should end up with the executable `pickett` in `/tmp/foo/bin`.
+You should end up with the executable `pickett` in `$GOPATH/bin`.
 
 The reason we use git clone instead of godep get to grab the source of pickett here is
 to enable a fork-based workflow.  There are internal references to packages in the

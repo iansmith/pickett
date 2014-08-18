@@ -78,7 +78,7 @@ func newNodeImpl(b builder) node {
 func (n *nodeImpl) isOutOfDate(conf *Config) (bool, error) {
 	//we have already done the work on this build?
 	if !n.tagTime.IsZero() {
-		conf.helper.Debug("Avoiding second check on %s (already found %v)", n.name(), n.tagTime)
+		flog.Debugf("Avoiding second check on %s (already found %v)", n.name(), n.tagTime)
 		return false, nil
 	}
 
@@ -107,12 +107,12 @@ func (n *nodeImpl) isOutOfDate(conf *Config) (bool, error) {
 //Build delegates to the builder action function if there is any work to do.
 func (n *nodeImpl) build(conf *Config) error {
 	if !n.tagTime.IsZero() {
-		conf.helper.Debug("No work to do for '%s'.", n.name())
+		flog.Debugf("No work to do for '%s'.", n.name())
 		return nil
 	}
 
 	if len(n.b.in()) != 0 {
-		conf.helper.Debug("Building dependencies of '%s' (%d)", n.name(), len(n.b.in()))
+		flog.Debugf("Building dependencies of '%s' (%d)", n.name(), len(n.b.in()))
 	}
 	for _, in := range n.b.in() {
 		if err := in.build(conf); err != nil {
@@ -120,7 +120,7 @@ func (n *nodeImpl) build(conf *Config) error {
 		}
 	}
 	//there is work to do locally
-	conf.helper.Debug("Building '%s'", n.name())
+	flog.Debugf("Building '%s'", n.name())
 	t, err := n.b.build(conf)
 	if err != nil {
 		return err

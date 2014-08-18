@@ -34,11 +34,11 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, err
 	}
 	if t.IsZero() {
-		fmt.Printf("[pickett] Building %s, tag not found.\n", g.tag())
+		flog.Infof("Building %s, tag not found.", g.tag())
 		return time.Time{}, true, nil
 	}
 	if t.Before(g.runIn.time()) {
-		fmt.Printf("[pickett] Building %s, out of date with respect to '%s'.\n", g.tag(), g.runIn.name())
+		flog.Infof("Building %s, out of date with respect to '%s'.", g.tag(), g.runIn.name())
 		return time.Time{}, true, nil
 	}
 
@@ -52,11 +52,11 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 		if err != nil {
 			return time.Time{}, true, err
 		}
-		conf.helper.Debug("mod time of %s is %v", g.testFile, info.ModTime())
+		flog.Debugf("mod time of %s is %v", g.testFile, info.ModTime())
 		if t.Before(info.ModTime()) {
 			return info.ModTime(), true, nil
 		}
-		fmt.Printf("[pickett] '%s' is up to date with respect to %s\n.", g.tag(), g.testFile)
+		flog.Infof("'%s' is up to date with respect to %s.", g.tag(), g.testFile)
 		return t, false, nil
 	}
 
@@ -74,12 +74,12 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 			return time.Time{}, true, err
 		}
 		if buf.Len() != 0 {
-			fmt.Printf("[pickett] Building %s, out of date with respect to source in %s.\n", g.tag(), g.pkgs[i])
+			flog.Infof("Building %s, out of date with respect to source in %s.", g.tag(), g.pkgs[i])
 			return time.Time{}, true, nil
 		}
 	}
 
-	fmt.Printf("[pickett] '%s' is up to date with respect to its source code.\n", g.tag())
+	flog.Infof("'%s' is up to date with respect to its source code.", g.tag())
 	return t, false, nil
 }
 

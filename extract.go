@@ -33,15 +33,15 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, err
 	}
 	if t.IsZero() {
-		fmt.Printf("[pickett] Building %s (tag not found)\n", e.tag())
+		flog.Infof("Building %s (tag not found)", e.tag())
 		return time.Time{}, true, nil
 	}
 	if e.runIn.isNode && t.Before(e.runIn.node.time()) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag(), e.runIn.name)
+		flog.Infof("Building %s (out of date with respect to %s)", e.tag(), e.runIn.name)
 		return time.Time{}, true, nil
 	}
 	if e.mergeWith.isNode && t.Before(e.mergeWith.node.time()) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to %s)\n", e.tag(), e.mergeWith.name)
+		flog.Infof("Building %s (out of date with respect to %s)", e.tag(), e.mergeWith.name)
 		return time.Time{}, true, nil
 	}
 
@@ -52,7 +52,7 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	if t.Before(last) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to source artifact)\n", e.tag())
+		flog.Infof("Building %s (out of date with respect to source artifact)", e.tag())
 		return time.Time{}, true, nil
 	}
 
@@ -87,7 +87,7 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, nil
 	}
 
-	fmt.Printf("[pickett] '%s' is up to date\n", e.tag())
+	flog.Infof("'%s' is up to date", e.tag())
 	return t, false, nil
 }
 
@@ -175,7 +175,7 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	conf.helper.Debug("done copying, time for %s is %v", e.tag(), insp.CreatedTime())
+	flog.Debugf("done copying, time for %s is %v", e.tag(), insp.CreatedTime())
 	return insp.CreatedTime(), nil
 }
 

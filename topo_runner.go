@@ -1,7 +1,6 @@
 package pickett
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/igneous-systems/pickett/io"
@@ -60,7 +59,7 @@ func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance
 
 	links := make(map[string]string)
 	for _, r := range n.consumes {
-		conf.helper.Debug("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
+		flog.Debugf("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
 		input, err := r.run(false, conf, topoName, 0)
 		if err != nil {
 			return nil, err
@@ -79,7 +78,7 @@ func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
 func (n *topoRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 	if !n.runIn.isNode {
-		conf.helper.Debug("'%s' can't be out of date, image '%s' is not buildable\n", n.name(), n.runIn.name)
+		flog.Debugf("'%s' can't be out of date, image '%s' is not buildable", n.name(), n.runIn.name)
 		return false, nil
 	}
 	return n.runIn.node.isOutOfDate(conf)
@@ -88,7 +87,7 @@ func (n *topoRunner) imageIsOutOfDate(conf *Config) (bool, error) {
 // we build the image if indeed that is possible
 func (n *topoRunner) imageBuild(conf *Config) error {
 	if !n.runIn.isNode {
-		fmt.Printf("[pickett WARNING] '%s' can't be built, image '%s' is not buildable\n", n.name(), n.runIn.name)
+		flog.Warningf("'%s' can't be built, image '%s' is not buildable", n.name(), n.runIn.name)
 		return nil
 	}
 	return n.runIn.node.build(conf)
@@ -120,7 +119,7 @@ func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	conf.helper.Debug("using run node %s to build", o.net.name())
+	flog.Debugf("using run node %s to build", o.net.name())
 
 	//this is starting to look dodgier and dodgier
 	in, err := o.net.run(true, conf, "pickett-build", 0)
