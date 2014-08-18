@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsouza/go-dockerclient"
@@ -63,12 +64,20 @@ type DockerCli interface {
 	CmdCopy(map[string]string, string, string, []*CopyArtifact, string) error
 	CmdLastModTime(map[string]string, string, []*CopyArtifact) (time.Time, error)
 	CmdStop(string) error
+	CmdRmContainer(string) error
+	CmdRmImage(string) error
+	TargetsStatus([]string) string
+	TargetsStop([]string)
+	TargetsDrop([]string)
+	TargetsWipe([]string)
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
 }
 
 type InspectedImage interface {
 	CreatedTime() time.Time
+	ID() string
+	ContainerID() string
 }
 
 type InspectedContainer interface {
@@ -160,6 +169,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	config.Cmd = s
 	config.Image = runconf.Image
 
+	fordebug := new(bytes.Buffer)
+	fordebug.WriteString("docker run ")
 	cont, err := d.createNamedContainer(config)
 	if err != nil {
 		return nil, "", err
@@ -170,11 +181,13 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	flatLinks := []string{}
 	for k, v := range runconf.Links {
 		flatLinks = append(flatLinks, fmt.Sprintf("%s:%s", k, v))
+		fordebug.WriteString(fmt.Sprintf("-link %s:%s ", k, v))
 	}
 	host.Links = flatLinks
 	host.Binds = []string{}
 	for k, v := range runconf.Volumes {
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
+		fordebug.WriteString(fmt.Sprintf("-v %s:%s ", k, v))
 	}
 
 	//convert the types of the elements of this map so that *our* clients don't
@@ -186,12 +199,14 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		for _, m := range v {
 			convertedMap[key] = append(convertedMap[key],
 				docker.PortBinding{HostIp: m.HostIp, HostPort: m.HostPort})
+			fordebug.WriteString(fmt.Sprintf("-p %s:%s:%s ", m.HostIp, m.HostPort, m.HostPort))
 		}
 	}
 	host.PortBindings = convertedMap
 
 	if d.showDocker {
-		fmt.Printf("[docker cmd] Starting container %s . %v\n", cont.ID, host)
+		cmd := strings.Trim(fmt.Sprint(s), "[]")
+		fmt.Printf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
 	}
 
 	err = d.client.StartContainer(cont.ID, host)
@@ -250,11 +265,27 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	fmt.Printf("TRYING TO STOP CONTAINER %s\n", contID)
 	return d.client.StopContainer(contID, 10)
 }
 
+func (d *dockerCli) CmdRmImage(imgID string) error {
+	fmt.Printf("TRYING TO REMOVE IMAGE %s\n", imgID)
+	return d.client.RemoveImage(imgID)
+}
+
+func (d *dockerCli) CmdRmContainer(contID string) error {
+	fmt.Printf("TRYING TO REMOVE CONTAINER %s\n", contID)
+	opts := docker.RemoveContainerOptions{
+		ID: contID,
+	}
+	return d.client.RemoveContainer(opts)
+}
+
 func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
+
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Tagging image %s as %s:%s\n", image, info.Repository, info.Tag)
+	}
 
 	return d.client.TagImage(image, docker.TagImageOptions{
 		Force: force,
@@ -272,14 +303,15 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 		opts.Repository = info.Repository
 	}
 
-	if d.showDocker {
-		fmt.Printf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, %Repo: %s\n", opts.Container, opts.Tag, opts.Repository)
-	}
-
 	image, err := d.client.CommitContainer(opts)
 	if err != nil {
 		return "", err
 	}
+
+	if d.showDocker {
+		fmt.Printf("[docker cmd] Commit of container %s AS image %s\n", opts.Container, image.ID)
+	}
+
 	return image.ID, nil
 }
 
@@ -470,7 +502,10 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 			}
 			//kinda hacky: we use a.SourcePath as the name *inside* the tarball so we can get the
 			//directory name right on the final output
-			dockerFile.WriteString(fmt.Sprintf("COPY %s TO %s .\n", a.SourcePath, a.DestinationDir))
+			if d.debug {
+				fmt.Printf("[debug] COPY %s TO %s.", a.SourcePath, a.DestinationDir)
+			}
+			dockerFile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
 			if !isFile {
 				if err := d.tarball(truePath, a.SourcePath, tw); err != nil {
 					return err
@@ -583,6 +618,7 @@ func (c *dockerCli) InspectImage(n string) (InspectedImage, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &imageInspect{
 		wrapped: i,
 	}, nil
@@ -598,9 +634,114 @@ func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
 	}, nil
 }
 
+// TargetsStatus returns a text report of the given targets
+func (c *dockerCli) TargetsStatus(targets []string) string {
+	timeFormat := "01/02/06-03:04PM"
+	containers := c.targetsContainers(targets)
+	images := c.targetsImages(targets)
+	info := fmt.Sprintf("%-25s | %-31s | %-31s - %-28s - Ports\n", "Target", "Image", "Container", "Status")
+	for _, target := range targets {
+		img, found := images[target]
+		if !found {
+			info += fmt.Sprintf("%-25s | No Image found                  | ", target)
+		} else {
+			ts := time.Unix(img.Created, 0).Format(timeFormat)
+			info += fmt.Sprintf("%-25s | %s (%s) | ", target, img.ID[:12], ts)
+		}
+		cont, found := containers[target]
+		if !found {
+			info += "No container found.\n"
+		} else {
+			ts := time.Unix(cont.Created, 0).Format(timeFormat)
+			ports := []int64{}
+			for _, p := range cont.Ports {
+				ports = append(ports, p.PrivatePort)
+			}
+			info += fmt.Sprintf("%s (%s) - %-28s - %v\n", cont.ID[:12], ts, cont.Status, ports)
+		}
+	}
+	return info
+}
+
+func (c *dockerCli) TargetsStop(targets []string) {
+	containers := c.targetsContainers(targets)
+	for _, t := range targets {
+		if con, ok := containers[t]; ok {
+			err := c.CmdStop(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+func (c *dockerCli) TargetsDrop(targets []string) {
+	containers := c.targetsContainers(targets)
+	for _, t := range targets {
+		if con, ok := containers[t]; ok {
+			err := c.CmdStop(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+			err = c.CmdRmContainer(con.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+func (c *dockerCli) TargetsWipe(targets []string) {
+	c.TargetsDrop(targets)
+	images := c.targetsImages(targets)
+	for _, t := range targets {
+		if i, ok := images[t]; ok {
+			err := c.CmdRmImage(i.ID)
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
+	}
+}
+
+// targetsContainers returns containers matching the target names, keyed by target name
+func (c *dockerCli) targetsContainers(targets []string) map[string]docker.APIContainers {
+	opts := docker.ListContainersOptions{
+		All: true,
+	}
+	ctns, _ := c.client.ListContainers(opts)
+	containers := map[string]docker.APIContainers{}
+	for _, c := range ctns {
+		if contains(targets, c.Image) {
+			containers[c.Image] = c
+		}
+	}
+	return containers
+}
+
+// targetsImages returns images matching the target names, keyed by target name
+func (c *dockerCli) targetsImages(targets []string) map[string]docker.APIImages {
+	imgs, _ := c.client.ListImages(true)
+	images := map[string]docker.APIImages{}
+	for _, c := range imgs {
+		if len(c.RepoTags) > 0 && contains(targets, c.RepoTags[0]) {
+			images[c.RepoTags[0]] = c
+		}
+	}
+	return images
+}
+
 //Wrappers for getting inspections
 func (i *imageInspect) CreatedTime() time.Time {
 	return i.wrapped.Created
+}
+
+func (i *imageInspect) ID() string {
+	return i.wrapped.ID
+}
+
+func (i *imageInspect) ContainerID() string {
+	return i.wrapped.Container
 }
 
 func (c *contInspect) CreatedTime() time.Time {

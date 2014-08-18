@@ -150,3 +150,12 @@ func lastTimeInADirTree(path string, bestSoFar time.Time) (time.Time, error) {
 	}
 	return best, nil
 }
+
+func contains(items []string, item string) bool {
+	for _, i := range items {
+		if i == item {
+			return true
+		}
+	}
+	return false
+}

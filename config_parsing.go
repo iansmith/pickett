@@ -10,31 +10,40 @@ import (
 //checkExistingNames is a helper to generate an error if the name is already
 //in use in this configuration.  Pass true if you are interested in build nodes,
 //false for networks.
-func (c *Config) checkExistingName(proposed string, wantNode bool) error {
+func (c *Config) checkExistingNodeName(proposed string) error {
 	p := strings.Trim(proposed, " \n")
 	if p == "" {
 		return fmt.Errorf("can't have an empty name in configuration file")
 	}
-	if wantNode {
-		if c.nameToNode[p] != nil {
-			return fmt.Errorf("name %s already in use in this configuration (build node)", p)
-		}
-	}
-	if c.nameToNetwork[p] != nil {
-		return fmt.Errorf("network name %s already in use in this configuration", p)
+	if c.nameToNode[p] != nil {
+		return fmt.Errorf("name %s already in use in this configuration (build node)", p)
 	}
 	return nil
 }
 
+func (c *Config) checkExistingTopologyName(topoName, nodeName string) error {
+	t := strings.Trim(topoName, " \n")
+	n := strings.Trim(nodeName, " \n")
+	tmap, ok := c.nameToTopology[t]
+	if !ok {
+		return fmt.Errorf("no topology named %s in use in this configuration", t)
+	}
+	if _, ok := tmap[n]; ok {
+		return fmt.Errorf("node named %s already in use in topology %s", n, t)
+	}
+	return nil
+
+}
+
 // checkContainerNodes walks all the "container" nodes defined in the configuration file.
 // The edges between the nodes are in place when this function completes.
-func (c *Config) checkContainerNodes(helper pickett_io.Helper, cli pickett_io.DockerCli) error {
+func (c *Config) checkContainerNodes() error {
 	for _, img := range c.Containers {
-		w, err := c.newContainerBuilder(img, helper)
+		w, err := c.newContainerBuilder(img, c.helper)
 		if err != nil {
 			return err
 		}
-		if err := c.checkExistingName(img.Tag, true); err != nil {
+		if err := c.checkExistingNodeName(img.Tag); err != nil {
 			return err
 		}
 		node := newNodeImpl(w)
@@ -60,20 +69,26 @@ func (c *Config) checkContainerNodes(helper pickett_io.Helper, cli pickett_io.Do
 // checkGoBuildNodes verifies all the "go build" nodes in this pickett file.  Note that
 // this should not be called until after the checkSourceNodes() have been
 // extracted as it needs data structures built at that stage.
-func (c *Config) checkGoBuildNodes(pickett_io.Helper, pickett_io.DockerCli) error {
+func (c *Config) checkGoBuildNodes() (map[*goBuilder]string, error) {
 	implementations := make(map[*goBuilder]string)
 	for _, build := range c.GoBuilds {
 		w, err := c.newGoBuilder(build)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := c.checkExistingName(build.Tag, true); err != nil {
-			return err
+		if err := c.checkExistingNodeName(build.Tag); err != nil {
+			return nil, err
 		}
 		node := newNodeImpl(w)
 		c.nameToNode[w.tag()] = node
 		implementations[w] = strings.Trim(build.RunIn, " \n")
 	}
+	return implementations, nil
+}
+
+// stage2BuildNodes is because we need to have the possibility of dependency
+// edges that are on networks or other gobuild nodes.
+func (c *Config) dependenciesGoBuildNodes(implementations map[*goBuilder]string) error {
 	for w, runIn := range implementations {
 		r, found := c.nameToNode[runIn]
 		if !found {
@@ -99,60 +114,75 @@ func (c *Config) tagExists(tag string, cli pickett_io.DockerCli) bool {
 	return err == nil
 }
 
-// checkExtractionNodes verifies all the "extract" nodes in the pickett file.  Note that
-// this should not be called until after the checkContainerNodes() and checkGoBuildNodes() have been
-// extracted their parts, as it needs data structures built in these functions
-// (notably dependencies).
-func (c *Config) checkExtractionNodes(helper pickett_io.Helper, cli pickett_io.DockerCli) error {
+// checkExtractionNodes verifies the simple portion of the extract nodes.  This does
+// not introduce edges as that requires that all the nodes be known.
+func (c *Config) checkExtractionNodes() (map[*extractionBuilder][]string, error) {
+	implementations := make(map[*extractionBuilder][]string)
 	for _, build := range c.Extractions {
 		w, err := c.newExtractionBuilder(build)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := c.checkExistingName(w.tag(), true); err != nil {
-			return err
+		if err := c.checkExistingNodeName(w.tag()); err != nil {
+			return nil, err
 		}
-		if !c.tagExists(build.RunIn, cli) {
-			return fmt.Errorf("Unable to find '%s' (RunIn) trying to setup for artifact build  '%s': maybe you need to 'docker pull' it?",
-				build.RunIn, build.Tag)
-		}
-		r, found := c.nameToNode[build.RunIn]
-		var in nodeOrName
-		in.name = build.RunIn
-		if found {
-			in.isNode = true
-			in.node = r
-		}
-		w.runIn = in
-		if !c.tagExists(build.MergeWith, cli) {
-			return fmt.Errorf("Unable to find '%s' (MergeWith) trying to setup for artifact '%s': maybe you need to 'docker pull' it?",
-				build.MergeWith, build.Tag)
-		}
-		m, found := c.nameToNode[build.MergeWith]
-		var merge nodeOrName
-		merge.name = build.MergeWith
-		if found {
-			merge.isNode = true
-			merge.node = m
-		}
-		w.mergeWith = merge
-
-		//
-		// handle dependency edges
-		//
-		_, ok := r.implementation().(*goBuilder)
-		if w.runIn.isNode == false || !ok {
-			return fmt.Errorf("Unable to create %s, right now artifacts must be derived from GoBuild nodes (%s is not GoBuild)",
-				build.Tag, r.name())
-		}
+		//put it in the list
 		node := newNodeImpl(w)
-		if w.runIn.isNode {
+		c.nameToNode[w.tag()] = node
+		implementations[w] = []string{}
+
+		mergeTrimmed := strings.Trim(build.MergeWith, " \n")
+		inTrimmed := strings.Trim(build.RunIn, " \n")
+		if mergeTrimmed == "" || inTrimmed == "" {
+			return nil, fmt.Errorf("MergeWith and RunIn are required for extractions!")
+		}
+		// the order of this append matters!
+		implementations[w] = append(implementations[w], inTrimmed, mergeTrimmed)
+	}
+	return implementations, nil
+}
+
+//dependenciesExtractNodes is the 2nd part of the extraction node construction.
+//In this phose we deal with the edges that may be needed to other nodes in the graph.
+func (c *Config) dependenciesExtractNodes(implementations map[*extractionBuilder][]string) error {
+	for extract, cand := range implementations {
+		//order dependent on the list of size 2 in cand!
+		in, merge := cand[0], cand[1]
+
+		//incoming from runIn
+		if !c.tagExists(in, c.cli) {
+			return fmt.Errorf("Unable to find '%s' (RunIn) in extract build  '%s': maybe you need to 'docker pull' it?",
+				in, extract.tag())
+		}
+		r, found := c.nameToNode[in]
+		n := nodeOrName{name: in}
+		if found {
+			n.isNode = true
+			n.node = r
+		}
+		extract.runIn = n
+
+		//incoming from mergeWith
+		if !c.tagExists(merge, c.cli) {
+			return fmt.Errorf("Unable to find '%s' (MergeWith) in extract build '%s': maybe you need to 'docker pull' it?",
+				merge, extract.tag())
+		}
+		m, found := c.nameToNode[merge]
+		n = nodeOrName{name: merge}
+		if found {
+			n.isNode = true
+			n.node = m
+		}
+		extract.mergeWith = n
+
+		//put in outgoings, if needed
+		node := c.nameToNode[extract.tag()]
+		if extract.runIn.isNode {
 			r.addOut(node)
 		}
-		if w.mergeWith.isNode {
+		if extract.mergeWith.isNode {
 			m.addOut(node)
 		}
-		c.nameToNode[w.tag()] = node
 	}
 	return nil
 }
@@ -166,77 +196,112 @@ func contains(list []string, candidate string) bool {
 	return false
 }
 
-//checkNetworks verifies all the network setups in this configuration file.
-func (c *Config) checkNetworks(helper pickett_io.Helper, cli pickett_io.DockerCli) error {
+//checkNetworkNodes verifies the easy part of all the network setups in this configuration file.
+//Thes does the portion that does not have dependencies and returns the necessary
+//bookkeeping for that to be done in a later pass.
+func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map[*topoRunner]string, error) {
 	commiters := make(map[string]*outcomeProxyBuilder)
+	implementations := make(map[*topoRunner]string)
+
 	//first pass is to establish all the names and do things that don't involve
-	//complex deps
-	for _, n := range c.Networks {
-		if err := c.checkExistingName(n.Name, false); err != nil {
-			return err
+	//complex deps of any kind
+	for _, n := range entries {
+		if err := c.checkExistingTopologyName(tname, n.Name); err != nil {
+			return nil, err
 		}
-		w, err := c.newNetworkRunner(n)
+		w, err := c.newTopoRunner(n)
 		if err != nil {
-			return err
+			return nil, err
 		}
+
+		//datastructures for later
 		trimmedIn := strings.Trim(n.RunIn, " \n")
-		other, ok := c.nameToNode[trimmedIn]
-		var in nodeOrName
-		in.name = trimmedIn
-		if ok {
-			in.node = other
-			in.isNode = true
+		implementations[w] = trimmedIn
+		trimmedName := strings.Trim(n.Name, " \n")
+		c.nameToTopology[tname][trimmedName] = &topoInfo{
+			runner:    w,
+			instances: n.Instances,
 		}
-		w.runIn = in
-		c.nameToNetwork[strings.Trim(n.Name, " \n")] = w
+
+		//this is the way we build nodes that are really "part of" this
+		//network runner but after it completes
 		for input, result := range n.CommitOnExit {
 			i := strings.Trim(input, " \n")
+			resultTrimmed := strings.Trim(result, " \n")
 			if !contains(n.Consumes, i) {
-				return fmt.Errorf("can't commit input %s in '%s' because it's not consumed",
+				return nil, fmt.Errorf("can't commit input %s in '%s' because it's not consumed",
 					i, w.name())
 			}
+			parts := strings.Split(resultTrimmed, ":")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("can't understand commit result name '%s' expected something like foo:bar", result)
+			}
 			p := &outcomeProxyBuilder{
-				net:         w,
-				inputName:   i,
-				imageResult: result,
+				net:        w,
+				inputName:  i,
+				repository: parts[0],
+				tagname:    parts[1],
 			}
 			//leave a breadcrump
 			commiters[i] = p
 			//put in list of nodes
-			c.nameToNode[result] = newNodeImpl(p)
+			c.nameToNode[resultTrimmed] = newNodeImpl(p)
 		}
 	}
-
-	//second pass is to introduce edges
-	for _, net := range c.Networks {
-		r := c.nameToNetwork[strings.Trim(net.Name, " \n")]
-		n := r.(*networkRunner)
-
-		//can't do this check until second pass
-		if !c.tagExists(net.RunIn, cli) {
-			return fmt.Errorf("unable to find image '%s' to run (network) %s in!", net.RunIn, net.Name)
-		}
-
+	//second pass is to handle the possibility that network nodes reference
+	//each other in the consumes section of the declaration
+	for _, net := range entries {
+		info := c.nameToTopology[tname][strings.Trim(net.Name, " \n")]
+		n := info.runner.(*topoRunner)
 		for _, in := range net.Consumes {
-			other, ok := c.nameToNetwork[in]
+			trimmed := strings.Trim(in, " \n")
+			other, ok := c.nameToTopology[tname][trimmed]
 			if !ok {
-				return fmt.Errorf("can't find other network node named %s for %s", in, n.name())
+				return nil, fmt.Errorf("can't find other topo node named %s for %s (in %s)", in, n.name(), tname)
 			}
-			n.consumes = append(n.consumes, other)
-			p, ok := commiters[n.name()]
-			if ok {
-				p.inputRunner = other
+			if other.instances > 1 {
+				return nil, fmt.Errorf("can't consume topo node %s, because there are multiple instances (%d) of it (in %s)",
+					in, other.instances, n.name())
 			}
+			n.consumes = append(n.consumes, other.runner)
 		}
 	}
 
+	return implementations, nil
+}
+
+//this works out to the third pass threough the network section.  this is to allow
+//allow the possibility that the networks can reference each other and can reference
+//the gobuild nodes.
+func (c *Config) dependenciesTopologyNodes(n string, implementations map[*topoRunner]string) error {
+	//walk the know networks
+	for n, runIn := range implementations {
+		if !c.tagExists(runIn, c.cli) {
+			return fmt.Errorf("unable to find image '%s' to run (network) %s in!", runIn, n.name())
+		}
+		n.runIn.name = runIn
+		node, ok := c.nameToNode[runIn]
+		if ok {
+			n.runIn.node = node
+			n.runIn.isNode = true
+		}
+	}
 	return nil
 }
 
-//newNetworkRunner creates a new networkRunner node from the data supplied. It can fail if
+//newtopoRunner creates a new topoRunner node from the data supplied. It can fail if
 //the config file is bogus; this ignores the issue of dependencies.
-func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
+func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 	exp := make(map[pickett_io.Port][]pickett_io.PortBinding)
+
+	if n.Instances > 1 && n.CommitOnExit != nil {
+		return nil, fmt.Errorf("can't commit on exit with multiple instances (in %s)", n.Name)
+	}
+
+	//convert zero or any negative value to 1
+	if n.Instances < 1 {
+		n.Instances = 1
+	}
 
 	//convert to the pickett_io format
 	for k, v := range n.Expose {
@@ -251,7 +316,7 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 		exp[key] = append(curr, b)
 	}
 
-	result := &networkRunner{
+	result := &topoRunner{
 		n:      n.Name,
 		expose: exp,
 	}

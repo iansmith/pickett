@@ -31,7 +31,7 @@ type builder interface {
 type runner interface {
 	namer
 	//this returns a map of the results, as containers
-	run(bool, *Config) (*policyInput, error)
+	run(bool, *Config, string, int) (*policyInput, error)
 
 	//some misc params for the run
 	imageName() string
@@ -44,9 +44,6 @@ type runner interface {
 
 	//again,this is building the image the runner runs in, not the runner itself
 	imageBuild(*Config) error
-
-	//when we are done we need to destroy both our object and the objects we created
-	destroy(*Config) error
 }
 
 //node is the abstraction for an element in the dependency graph of builders.

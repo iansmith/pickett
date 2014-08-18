@@ -26,7 +26,7 @@ func (c *containerBuilder) tag() string {
 func tagToTime(tag string, cli io.DockerCli) (time.Time, error) {
 	interesting, err := cli.InspectImage(tag)
 	if err != nil {
-		fmt.Printf("xxx is it ok to ignore this error on inspect %s?\n", tag)
+		//fmt.Printf("xxx is it ok to ignore this error on inspect %s?\n", tag)
 		return time.Time{}, nil
 	}
 	return interesting.CreatedTime(), nil
