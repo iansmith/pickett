@@ -34,6 +34,7 @@ type RunConfig struct {
 	Attach     bool
 	Volumes    map[string]string
 	Ports      map[Port][]PortBinding
+	Devices    map[string]string
 	Links      map[string]string
 	WaitOutput bool
 }

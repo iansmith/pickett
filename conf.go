@@ -60,6 +60,7 @@ type Network struct {
 	Policy       string
 	Expose       map[string]int
 	CommitOnExit map[string]string
+	Devices      map[string]string
 }
 
 type BuildOpts struct {

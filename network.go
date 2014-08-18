@@ -25,6 +25,7 @@ type networkRunner struct {
 	policy        policy
 	expose        map[io.Port][]io.PortBinding
 	containerName string
+	devs          map[string]string
 }
 
 func (n *networkRunner) name() string {
@@ -33,6 +34,10 @@ func (n *networkRunner) name() string {
 
 func (n *networkRunner) exposed() map[io.Port][]io.PortBinding {
 	return n.expose
+}
+
+func (n *networkRunner) devices() map[string]string {
+	return n.devs
 }
 
 func (n *networkRunner) entryPoint() []string {
