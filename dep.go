@@ -38,6 +38,7 @@ type runner interface {
 	exposed() map[io.Port][]io.PortBinding
 	devices() map[string]string
 	entryPoint() []string
+	privileged() bool
 
 	//note that this method is not really asking a question of the runner, it's asking a
 	//question about the *image* that the runner executes in

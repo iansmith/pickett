@@ -66,6 +66,7 @@ func (p *policyInput) start(teeOutput bool, image string, links map[string]strin
 		Links:      links,
 		Ports:      p.r.exposed(),
 		Devices:    p.r.devices(),
+		Privileged: p.r.privileged(),
 	}
 
 	_, contId, err := cli.CmdRun(runConfig, p.r.entryPoint()...)

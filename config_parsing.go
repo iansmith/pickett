@@ -293,6 +293,7 @@ func (c *Config) newNetworkRunner(n *Network) (*networkRunner, error) {
 		n:      n.Name,
 		expose: exp,
 		devs:   n.Devices,
+		priv:   n.Privileged,
 	}
 	pol := defaultPolicy()
 	switch strings.ToUpper(n.Policy) {

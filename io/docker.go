@@ -36,6 +36,7 @@ type RunConfig struct {
 	Ports      map[Port][]PortBinding
 	Devices    map[string]string
 	Links      map[string]string
+	Privileged bool
 	WaitOutput bool
 }
 
@@ -185,6 +186,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	for k, v := range runconf.Volumes {
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
 	}
+	// As far as docker is concerned a Device and a volume is the same thing so maybe it's not ncessary
+	// to separet thoase, OTH it has the benefit of clarity.
+	for k, v := range runconf.Devices {
+		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
+	}
 
 	//convert the types of the elements of this map so that *our* clients don't
 	//see the inner types
@@ -199,9 +205,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	}
 	host.PortBindings = convertedMap
 
+	host.Privileged = runconf.Privileged
+
 	if d.showDocker {
-		fmt.Printf("[docker cmd] Starting container %s (%s). Binds: %v . Ports: %v\n",
-			cont.Name, cont.ID, host.Binds, host.PortBindings)
+		fmt.Printf("[docker cmd] Starting container %s (%s). Binds: %v . Ports: %v, Privileged: %v\n",
+			cont.Name, cont.ID, host.Binds, host.PortBindings, host.Privileged)
 	}
 
 	err = d.client.StartContainer(cont.ID, host)

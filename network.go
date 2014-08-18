@@ -26,6 +26,7 @@ type networkRunner struct {
 	expose        map[io.Port][]io.PortBinding
 	containerName string
 	devs          map[string]string
+	priv          bool
 }
 
 func (n *networkRunner) name() string {
@@ -38,6 +39,10 @@ func (n *networkRunner) exposed() map[io.Port][]io.PortBinding {
 
 func (n *networkRunner) devices() map[string]string {
 	return n.devs
+}
+
+func (n *networkRunner) privileged() bool {
+	return n.priv
 }
 
 func (n *networkRunner) entryPoint() []string {

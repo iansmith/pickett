@@ -61,6 +61,7 @@ type Network struct {
 	Expose       map[string]int
 	CommitOnExit map[string]string
 	Devices      map[string]string
+	Privileged   bool
 }
 
 type BuildOpts struct {
