@@ -1,7 +1,6 @@
 package io
 
 import (
-	"fmt"
 	"github.com/coreos/go-etcd/etcd"
 	"path/filepath"
 	"strings"
@@ -39,14 +38,10 @@ func NewEtcdClient() (EtcdClient, error) {
 }
 func (e *etcdClient) Children(path string) ([]string, error) {
 	path = filepath.Clean(path)
-	if e.debug {
-		fmt.Printf("[etcd] CHILDREN %s\n", path)
-	}
+	flog.Debugf("[etcd] CHILDREN %s", path)
 	resp, err := e.client.Get(path, false, false)
 	if err != nil {
-		if e.debug {
-			fmt.Printf("[etcd err] %v\n", err)
-		}
+		flog.Debugf("[etcd err] %v\n", err)
 		return nil, err
 	}
 	pathLen := len(path)
@@ -57,9 +52,7 @@ func (e *etcdClient) Children(path string) ([]string, error) {
 	for _, r := range resp.Node.Nodes {
 		result = append(result, r.Key[pathLen:])
 	}
-	if e.debug {
-		fmt.Printf("[etcd response] %s\n", result)
-	}
+	flog.Debugf("[etcd response] %s", result)
 	return result, nil
 }
 

@@ -257,7 +257,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	return d.client.StopContainer(contID, 10)
+	flog.Debugf("Stopping container %s\n", contID)
+	return d.client.StopContainer(contID, 2)
 }
 
 func (d *dockerCli) CmdRmImage(imgID string) error {

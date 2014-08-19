@@ -11,16 +11,15 @@ import (
 
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(targets []string, config *Config) {
+func CmdRun(targets []string, config *Config) error {
 	_, runnables := config.EntryPoints()
 	if len(targets) == 0 {
-		config.helper.Fatalf("must supply a target to run (one of %s)\n", strings.Trim(fmt.Sprint(runnables), "[]"))
+		return fmt.Errorf("must supply a target to run (one of %s)\n", strings.Trim(fmt.Sprint(runnables), "[]"))
 	}
 	if len(targets) > 1 {
-		config.helper.Fatalf("too many arguments to run--can only run one target at a time\n")
+		return fmt.Errorf("too many arguments to run--can only run one target at a time\n")
 	}
-	err := config.Execute(targets[0])
-	config.helper.CheckFatal(err, "%s: %v", targets[0])
+	return config.Execute(targets[0])
 }
 
 //return value is a bit tricky here for the primary return.  If it's nil
@@ -72,6 +71,9 @@ func statusInstances(topoName string, nodeName string, config *Config) (map[int]
 			return nil, err
 		}
 		if found {
+			if strings.HasPrefix(cont, "/") {
+				cont = cont[1:]
+			}
 			result[i] = cont
 		} else {
 			result[i] = ""
@@ -84,37 +86,47 @@ const TIME_FORMAT = "01/02/06-03:04PM"
 
 // CmdBuild builds all the targets you supplied, or all the final
 //results if you don't supply anything. This is the analogue of CmdRun.
-func CmdBuild(targets []string, config *Config) {
+func CmdBuild(targets []string, config *Config) error {
 	buildables, _ := config.EntryPoints()
 	toBuild := buildables
 	if len(targets) > 0 {
 		toBuild = []string{}
 		for _, targ := range targets {
 			if !contains(buildables, targ) {
-				config.helper.Fatalf("%s is not buildable", targ)
+				fmt.Errorf("%s is not buildable, ignoring", targ)
+				continue
 			}
 			toBuild = append(toBuild, targ)
 		}
 	}
 	for _, build := range toBuild {
 		err := config.Build(build)
-		config.helper.CheckFatal(err, "%s:%v", build)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
-func allKnownImages(config *Config) []string {
-	imgs := []string{}
-	for k, _ := range config.nameToNode {
-		imgs = append(imgs, k)
+
+func chosenRunnables(config *Config, targets []string) []string {
+	_, runnables := config.EntryPoints()
+	if len(targets) == 0 {
+		return runnables
 	}
-	return imgs
+	run := []string{}
+	for _, targ := range targets {
+		if contains(runnables, targ) {
+			run = append(run, targ)
+		}
+	}
+	return run
 }
 
 // CmdStatus shows the status of all known targets or the set you supply
-func CmdStatus(targets []string, config *Config) {
-	_, runnables := config.EntryPoints()
-	all := allKnownImages(config)
+func CmdStatus(targets []string, config *Config) error {
+	runStatus := chosenRunnables(config, targets)
+	all, _ := config.EntryPoints()
 	buildStatus := all
-	runStatus := runnables
 
 	if len(targets) != 0 {
 		buildStatus := []string{}
@@ -123,17 +135,11 @@ func CmdStatus(targets []string, config *Config) {
 				buildStatus = append(buildStatus, targ)
 			}
 		}
-		runStatus := []string{}
-		for _, targ := range targets {
-			if contains(runnables, targ) {
-				runStatus = append(runStatus, targ)
-			}
-		}
 	}
 	for _, target := range buildStatus {
 		insp, err := config.cli.InspectImage(target)
 		if err != nil && err.Error() != "no such image" {
-			config.helper.Fatalf("reading image status %s: %v", target, err)
+			return err
 		}
 		if err != nil {
 			fmt.Printf("%-25s | %-31s\n", target, "not found")
@@ -145,40 +151,91 @@ func CmdStatus(targets []string, config *Config) {
 	for _, target := range runStatus {
 		pair := strings.Split(target, ".")
 		if len(pair) != 2 {
-			panic(fmt.Sprintf("can' understand the target %s", target))
+			panic(fmt.Sprintf("can't understand the target %s", target))
 		}
 		instances, err := statusInstances(pair[0], pair[1], config)
-		config.helper.CheckFatal(err, "failed to retrieve status from etcd %s", target)
+		if err != nil {
+			return err
+		}
 		for i, cont := range instances {
 			extra := fmt.Sprintf("[%d]", i)
 			insp, err := config.cli.InspectContainer(cont)
-			fmt.Printf("%-25s | %-31s\n", target+extra, cont)
+			if err != nil {
+				fmt.Printf("container %s not inspected: %v\n", cont, err)
+				continue
+			}
+			if insp.Running() {
+				extra += "*"
+			}
+			fmt.Printf("%-25s | %-31s | %-19s\n", target+extra, cont, insp.CreatedTime().Format(TIME_FORMAT))
 		}
 	}
+	return nil
 }
 
 // CmdStop stops the targets containers
-func CmdStop(targets []string, config *Config) {
-	/*
-		if len(targets) == 0 {
-			targets = confTargets(config)
+func CmdStop(targets []string, config *Config) error {
+	stopSet := chosenRunnables(config, targets)
+	for _, stop := range stopSet {
+		pair := strings.Split(stop, ".")
+		if len(pair) != 2 {
+			panic(fmt.Sprintf("can't understand the target %s", stop))
 		}
-		config.cli.TargetsStop(targets)
-	*/
+		instances, err := statusInstances(pair[0], pair[1], config)
+		if err != nil {
+			return err
+		}
+		for _, contId := range instances {
+			insp, err := config.cli.InspectContainer(contId)
+			if err != nil {
+				return err
+			}
+			if insp.Running() {
+				fmt.Printf("[pickett] trying to stop %s [%s]\n", contId, stop)
+				if err := config.cli.CmdStop(contId); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // CmdDrop stops and removes the targets containers
-func CmdDrop(targets []string, config *Config) {
-	/*
-		if len(targets) == 0 {
-			targets = confTargets(config)
+func CmdDrop(targets []string, config *Config) error {
+	err := CmdStop(targets, config)
+	if err != nil {
+		return err
+	}
+	dropSet := chosenRunnables(config, targets)
+	for _, drop := range dropSet {
+		pair := strings.Split(drop, ".")
+		if len(pair) != 2 {
+			panic(fmt.Sprintf("can't understand the target %s", drop))
 		}
-		config.cli.TargetsDrop(targets)
-	*/
+		instances, err := statusInstances(pair[0], pair[1], config)
+		if err != nil {
+			return err
+		}
+		for i, contId := range instances {
+			if err := config.cli.CmdRmContainer(contId); err != nil {
+				return err
+			}
+			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
+			oldId, err := config.etcd.Del(key)
+			if err != nil || oldId != contId {
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("Unexpected container id: expecting %s but got %s!", contId, oldId)
+			}
+		}
+	}
+	return nil
 }
 
 // CmdWipe stops the targets containers
-func CmdWipe(targets []string, config *Config) {
+func CmdWipe(targets []string, config *Config) error {
 	buildables := []string{}
 	for k, _ := range config.nameToNode {
 		buildables = append(buildables, k)
@@ -188,7 +245,7 @@ func CmdWipe(targets []string, config *Config) {
 		toWipe := []string{}
 		for _, t := range targets {
 			if !contains(buildables, t) {
-				config.helper.Fatalf("don't know anything about %s", t)
+				return fmt.Errorf("don't know anything about %s", t)
 			}
 			toWipe = append(toWipe, t)
 		}
@@ -203,9 +260,10 @@ func CmdWipe(targets []string, config *Config) {
 				fmt.Printf("[pickett] image %s is in use, ignoring\n", image)
 				continue
 			}
-			config.helper.Fatalf("%s: %v", image, err)
+			return fmt.Errorf("%s: %v", image, err)
 		}
 	}
+	return nil
 }
 
 // checkTargets check the targets against the targets found in the config,

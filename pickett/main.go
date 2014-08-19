@@ -123,16 +123,16 @@ func main() {
 		panic("can't get working directory!")
 	}
 
+	_, err = os.Open(filepath.Join(wd, configFile))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "can't find configuration file: %s\n", filepath.Join(wd, configFile))
+		os.Exit(1)
+	}
+
 	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
 	if err != nil {
 		flog.Errorf("failed to make IO objects: %v", err)
-	} else {
-		err = trueMain(flag.Args(), helper, docker, etcd, vbox)
-		if err != nil {
-			flog.Errorln(err)
-		}
 	}
-
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
 	if err != nil {
@@ -140,22 +140,24 @@ func main() {
 	}
 	switch args[0] {
 	case "run":
-		pickett.CmdRun(args[1:], config)
+		err = pickett.CmdRun(args[1:], config)
 	case "build":
-		pickett.CmdBuild(args[1:], config)
+		err = pickett.CmdBuild(args[1:], config)
 	case "status":
-		pickett.CmdStatus(args[1:], config)
+		err = pickett.CmdStatus(args[1:], config)
 	case "stop":
-		pickett.CmdStop(args[1:], config)
+		err = pickett.CmdStop(args[1:], config)
 	case "drop":
-		pickett.CmdDrop(args[1:], config)
+		err = pickett.CmdDrop(args[1:], config)
 	case "wipe":
-		pickett.CmdWipe(args[1:], config)
+		err = pickett.CmdWipe(args[1:], config)
 	default:
 		usage()
+		os.Exit(1)
 	}
 
 	if err != nil {
+		flog.Errorf("%s: %v", args[0], err)
 		os.Exit(1)
 	} else {
 		os.Exit(0)
