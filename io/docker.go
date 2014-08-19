@@ -122,7 +122,7 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	for tries < 3 {
 		opts.Config = config
 		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Creating container %s from image: %s", opts.Name, opts.Config.Image)
+		flog.Debugf("[docker cmd] Attempting to create container %s (%d) from image: %s", opts.Name, tries, opts.Config.Image)
 
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
@@ -140,7 +140,7 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	if !ok {
 		opts.Name = "" //fallback
 		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Creating container. Name: %s", opts.Name)
+		flog.Debugf("[docker cmd] Creating container named: %s", opts.Name)
 
 		cont, err = d.client.CreateContainer(opts)
 		if err != nil {
@@ -169,7 +169,7 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	flatLinks := []string{}
 	for k, v := range runconf.Links {
 		flatLinks = append(flatLinks, fmt.Sprintf("%s:%s", k, v))
-		fordebug.WriteString(fmt.Sprintf("-link %s:%s ", k, v))
+		fordebug.WriteString(fmt.Sprintf("--link %s:%s ", k, v))
 	}
 	host.Links = flatLinks
 	host.Binds = []string{}

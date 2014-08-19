@@ -154,6 +154,7 @@ func CmdStatus(targets []string, config *Config) error {
 			panic(fmt.Sprintf("can't understand the target %s", target))
 		}
 		instances, err := statusInstances(pair[0], pair[1], config)
+		flog.Infof("XXX %s checked ... %d", target, len(instances))
 		if err != nil {
 			return err
 		}
