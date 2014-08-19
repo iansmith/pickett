@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -176,9 +177,13 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
 		fordebug.WriteString(fmt.Sprintf("-v %s:%s ", k, v))
 	}
-	// As far as docker is concerned a Device and a volume is the same thing so maybe it's not ncessary
-	// to separet thoase, OTH it has the benefit of clarity.
+
 	for k, v := range runconf.Devices {
+		if len(s) >= 2 {
+			instance, _ := strconv.Atoi(s[2])
+			letter := 'b' + instance
+			k = strings.Replace(k, "?", string(letter), -1)
+		}
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
 	}
 
