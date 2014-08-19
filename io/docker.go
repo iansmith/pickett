@@ -203,6 +203,9 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 
 	host.Privileged = runconf.Privileged
 
+	for k, v := range host.PortBinding {
+		flog.Infof("k=>%+v, v=>%+v\n", k, v)
+	}
 	cmd := strings.Trim(fmt.Sprint(s), "[]")
 	flog.Debugf("[docker cmd] %s %s %s\n", fordebug.String(), config.Image, cmd)
 
