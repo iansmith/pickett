@@ -109,6 +109,26 @@ func (_mr *_MockDockerCliRecorder) CmdStop(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdStop", arg0)
 }
 
+func (_m *MockDockerCli) CmdRmContainer(_param0 string) error {
+	ret := _m.ctrl.Call(_m, "CmdRmContainer", _param0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdRmContainer(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRmContainer", arg0)
+}
+
+func (_m *MockDockerCli) CmdRmImage(_param0 string) error {
+	ret := _m.ctrl.Call(_m, "CmdRmImage", _param0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockDockerCliRecorder) CmdRmImage(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRmImage", arg0)
+}
+
 func (_m *MockDockerCli) InspectImage(_param0 string) (InspectedImage, error) {
 	ret := _m.ctrl.Call(_m, "InspectImage", _param0)
 	ret0, _ := ret[0].(InspectedImage)
@@ -160,6 +180,26 @@ func (_m *MockInspectedImage) CreatedTime() time.Time {
 
 func (_mr *_MockInspectedImageRecorder) CreatedTime() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CreatedTime")
+}
+
+func (_m *MockInspectedImage) ID() string {
+	ret := _m.ctrl.Call(_m, "ID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+func (_mr *_MockInspectedImageRecorder) ID() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ID")
+}
+
+func (_m *MockInspectedImage) ContainerID() string {
+	ret := _m.ctrl.Call(_m, "ContainerID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+func (_mr *_MockInspectedImageRecorder) ContainerID() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerID")
 }
 
 // Mock of InspectedContainer interface
