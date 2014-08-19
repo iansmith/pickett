@@ -2,12 +2,15 @@ package io
 
 import (
 	"github.com/coreos/go-etcd/etcd"
+	"path/filepath"
+	"strings"
 )
 
 type EtcdClient interface {
 	Get(string) (string, bool, error)
 	Put(string, string) (string, error)
 	Del(string) (string, error)
+	Children(string) ([]string, error)
 }
 
 const (
@@ -22,19 +25,6 @@ func NewEtcdClient() (EtcdClient, error) {
 	result := &etcdClient{
 		client: etcd.NewClient([]string{constructEctdHost()}),
 	}
-	/*	client, err := etcd.NewTLSClient(
-				[]string{"https://iansmith.iggy.bz:4001"},
-				"/home/iansmith/.docker/cert.pem",
-				"/home/iansmith/.docker/key.pem",
-				"/home/iansmith/.docker/ca.pem")
-			if err != nil {
-				panic(err)
-			}
-		result := &etcdClient{
-			client: client,
-			debug:  debug,
-		}*/
-
 	_, err := result.client.Get("/blah/blah/blah", false, false)
 	if err == nil {
 		panic("should not be able to retreive /blah/blah/blah")
@@ -44,6 +34,25 @@ func NewEtcdClient() (EtcdClient, error) {
 	if e.ErrorCode != 100 {
 		return nil, e
 	}
+	return result, nil
+}
+func (e *etcdClient) Children(path string) ([]string, error) {
+	path = filepath.Clean(path)
+	flog.Debugf("[etcd] CHILDREN %s", path)
+	resp, err := e.client.Get(path, false, false)
+	if err != nil {
+		flog.Debugf("[etcd err] %v\n", err)
+		return nil, err
+	}
+	pathLen := len(path)
+	if !strings.HasSuffix(path, "/") {
+		pathLen += 1
+	}
+	result := []string{}
+	for _, r := range resp.Node.Nodes {
+		result = append(result, r.Key[pathLen:])
+	}
+	flog.Debugf("[etcd response] %s", result)
 	return result, nil
 }
 

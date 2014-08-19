@@ -136,6 +136,7 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 	for _, seq := range sequence {
 		runConfig.Image = img
 		_, contId, err := conf.cli.CmdRun(runConfig, seq...)
+		fmt.Printf("RUNNING COMMAND: %s, err %v\n", seq, err)
 		if err != nil {
 			return time.Time{}, err
 		}

@@ -68,10 +68,6 @@ type DockerCli interface {
 	CmdStop(string) error
 	CmdRmContainer(string) error
 	CmdRmImage(string) error
-	TargetsStatus([]string) string
-	TargetsStop([]string)
-	TargetsDrop([]string)
-	TargetsWipe([]string)
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
 }
@@ -261,7 +257,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	return d.client.StopContainer(contID, 10)
+	flog.Debugf("Stopping container %s\n", contID)
+	return d.client.StopContainer(contID, 2)
 }
 
 func (d *dockerCli) CmdRmImage(imgID string) error {
@@ -602,106 +599,6 @@ func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
 	return &contInspect{
 		wrapped: i,
 	}, nil
-}
-
-// TargetsStatus returns a text report of the given targets
-func (c *dockerCli) TargetsStatus(targets []string) string {
-	timeFormat := "01/02/06-03:04PM"
-	containers := c.targetsContainers(targets)
-	images := c.targetsImages(targets)
-	info := fmt.Sprintf("%-25s | %-31s | %-31s - %-28s - Ports\n", "Target", "Image", "Container", "Status")
-	for _, target := range targets {
-		img, found := images[target]
-		if !found {
-			info += fmt.Sprintf("%-25s | No Image found                  | ", target)
-		} else {
-			ts := time.Unix(img.Created, 0).Format(timeFormat)
-			info += fmt.Sprintf("%-25s | %s (%s) | ", target, img.ID[:12], ts)
-		}
-		cont, found := containers[target]
-		if !found {
-			info += "No container found\n"
-		} else {
-			ts := time.Unix(cont.Created, 0).Format(timeFormat)
-			ports := []int64{}
-			for _, p := range cont.Ports {
-				ports = append(ports, p.PrivatePort)
-			}
-			info += fmt.Sprintf("%s (%s) - %-28s - %v\n", cont.ID[:12], ts, cont.Status, ports)
-		}
-	}
-	return info
-}
-
-func (c *dockerCli) TargetsStop(targets []string) {
-	containers := c.targetsContainers(targets)
-	for _, t := range targets {
-		if con, ok := containers[t]; ok {
-			fmt.Println(t)
-			err := c.CmdStop(con.ID)
-			if err != nil {
-				fmt.Print(err)
-			}
-		}
-	}
-}
-
-func (c *dockerCli) TargetsDrop(targets []string) {
-	containers := c.targetsContainers(targets)
-	for _, t := range targets {
-		if con, ok := containers[t]; ok {
-			fmt.Println(t)
-			err := c.CmdStop(con.ID)
-			if err != nil {
-				fmt.Print(err)
-			}
-			err = c.CmdRmContainer(con.ID)
-			if err != nil {
-				fmt.Print(err)
-			}
-		}
-	}
-}
-
-func (c *dockerCli) TargetsWipe(targets []string) {
-	c.TargetsDrop(targets)
-	images := c.targetsImages(targets)
-	for _, t := range targets {
-		if i, ok := images[t]; ok {
-			fmt.Println(t)
-			err := c.CmdRmImage(i.ID)
-			if err != nil {
-				fmt.Print(err)
-			}
-		}
-	}
-}
-
-// targetsContainers returns containers matching the target names, keyed by target name
-func (c *dockerCli) targetsContainers(targets []string) map[string]docker.APIContainers {
-	opts := docker.ListContainersOptions{
-		All: true,
-	}
-	ctns, _ := c.client.ListContainers(opts)
-	containers := map[string]docker.APIContainers{}
-	for _, c := range ctns {
-		if contains(targets, c.Image) {
-			containers[c.Image] = c
-		}
-	}
-	return containers
-}
-
-// targetsImages returns images matching the target names, keyed by target name
-func (c *dockerCli) targetsImages(targets []string) map[string]docker.APIImages {
-	imgs, _ := c.client.ListImages(true)
-	images := map[string]docker.APIImages{}
-	for _, c := range imgs {
-		if len(c.RepoTags) > 0 && contains(targets, c.RepoTags[0]) {
-			images[c.RepoTags[0]] = c
-		}
-	}
-	return images
 }
 
 //Wrappers for getting inspections
