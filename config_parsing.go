@@ -311,7 +311,7 @@ func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 			curr = []pickett_io.PortBinding{}
 		}
 		var b pickett_io.PortBinding
-		b.HostIp = "127.0.0.1"
+		b.HostIp = "0.0.0.0"
 		b.HostPort = fmt.Sprintf("%d", v)
 		exp[key] = append(curr, b)
 	}
