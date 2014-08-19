@@ -158,6 +158,8 @@ func main() {
 	}
 
 	if err != nil {
+		// Make sure we get flog a chance to flush before exit
+		logit.Flush(time.Millisecond * 300)
 		flog.Errorf("%s: %v", args[0], err)
 		os.Exit(1)
 	} else {
