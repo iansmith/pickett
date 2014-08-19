@@ -10,6 +10,10 @@ fi
 
 # Get and run godep over pickett sources
 go get github.com/tools/godep
-godep get github.com/igneous-systems/pickett/pickett
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd $DIR/pickett
+godep restore
+
 # Install pickett
 go install github.com/igneous-systems/pickett/pickett
