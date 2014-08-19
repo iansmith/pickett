@@ -71,7 +71,8 @@ func (d *containerBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	if d.dirTime.After(d.imgTime) {
-		flog.Infof("'%s' needs to be rebuilt, source directory %s is newer.", d.tag(), d.dir)
+		flog.Infof("'%s' needs to be rebuilt, source directory %s is newer (%v vs %v).",
+			d.tag(), d.dir, d.imgTime, d.dirTime)
 		return time.Time{}, true, nil
 	}
 

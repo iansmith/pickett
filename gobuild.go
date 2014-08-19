@@ -68,14 +68,25 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 		return time.Time{}, true, err
 	}
 	for i, seq := range sequence {
-		//fire for range
-		buf, _, err := conf.cli.CmdRun(runConfig, seq...)
-		if err != nil {
-			return time.Time{}, true, err
-		}
-		if buf.Len() != 0 {
-			flog.Infof("Building %s, out of date with respect to source in %s.", g.tag(), g.pkgs[i])
-			return time.Time{}, true, nil
+		if seq[0] == "sourceDirChecker" {
+			sdc := NewSourceDirChecker(t)
+			laterTime, err := sdc.Check(conf, seq[1])
+			if err != nil {
+				return time.Time{}, true, nil
+			}
+			if !laterTime.IsZero() {
+				return laterTime, true, nil
+			}
+		} else {
+			//fire for range
+			buf, _, err := conf.cli.CmdRun(runConfig, seq...)
+			if err != nil {
+				return time.Time{}, true, err
+			}
+			if buf.Len() != 0 {
+				flog.Infof("Building %s, out of date with respect to source in %s.", g.tag(), g.pkgs[i])
+				return time.Time{}, true, nil
+			}
 		}
 	}
 
@@ -136,7 +147,6 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 	for _, seq := range sequence {
 		runConfig.Image = img
 		_, contId, err := conf.cli.CmdRun(runConfig, seq...)
-		fmt.Printf("RUNNING COMMAND: %s, err %v\n", seq, err)
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -163,4 +173,37 @@ func (g *goBuilder) in() []node {
 	return []node{
 		g.runIn,
 	}
+}
+
+//
+// sourceDirChecker is a utility type for doing cehcks of a sequence of
+// directories (and their subdirs).
+//
+type sourceDirChecker struct {
+	target time.Time
+}
+
+func NewSourceDirChecker(t time.Time) *sourceDirChecker {
+	return &sourceDirChecker{
+		target: t,
+	}
+}
+
+//Check that the path(relative to the config file) is up to date.
+//Returns time's zero if everything is older than our target time. Returns the time
+//if found something newer than target (there might be others).  This
+//function checks subdirectories, so you should pass the root directory of
+//the check you want to perform.
+func (s *sourceDirChecker) Check(config *Config, path string) (time.Time, error) {
+	flog.Infof("XXXX checking directory %s versus timestamp %v", path, s.target)
+	t, err := config.helper.LastTimeInDirRelative(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	flog.Infof("XXXX got %v %v", t, t.After(s.target))
+
+	if t.After(s.target) {
+		return t, nil
+	}
+	return time.Time{}, nil
 }
