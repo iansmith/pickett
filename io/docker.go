@@ -186,7 +186,6 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		if len(s) >= 2 {
 			instance, _ := strconv.Atoi(s[2])
 			letter := 'b' + instance
-			fmt.Printf("Letter: %v", letter)
 			k = strings.Replace(k, "?", string(letter), -1)
 		}
 		host.Binds = append(host.Binds, fmt.Sprintf("%s:%s", k, v))
