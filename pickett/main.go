@@ -136,7 +136,8 @@ func main() {
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
 	if err != nil {
-		flog.Errorf("Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
+		fmt.Fprintf(os.Stderr, "Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
+		os.Exit(1)
 	}
 	switch args[0] {
 	case "run":

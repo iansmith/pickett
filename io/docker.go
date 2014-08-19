@@ -299,7 +299,7 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 		opts.Repository = info.Repository
 	}
 
-	flog.Debugf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, %Repo: %s", opts.Container, opts.Tag, opts.Repository)
+	flog.Debugf("[docker cmd] Commit of container. Options: Container: %s, Tag: %s, Repo: %s", opts.Container, opts.Tag, opts.Repository)
 
 	image, err := d.client.CommitContainer(opts)
 	if err != nil {
