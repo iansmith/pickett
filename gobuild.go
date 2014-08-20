@@ -101,11 +101,10 @@ type runCommand []string
 func (g *goBuilder) formBuildCommand(conf *Config, dontExecute bool) (*io.RunConfig, []runCommand, error) {
 
 	attach := true
-	waitOutput := false
+	waitOutput := true
 
 	if dontExecute {
 		attach = false
-		waitOutput = true
 	}
 
 	volumes, err := conf.codeVolumes()
