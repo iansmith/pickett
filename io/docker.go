@@ -212,11 +212,6 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	}
 
 	if runconf.Attach {
-
-		if runconf.WaitOutput {
-			flog.Warningf("shouldn't use WaitOutput with Attach, ignoring.")
-		}
-
 		//These are the right settings if you want to "watch" the output of the command and wait for
 		//it to terminate
 		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
@@ -232,11 +227,21 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		if err != nil {
 			return nil, "", err
 		}
-		return nil, cont.ID, nil
-	}
 
-	//wait for result and return a buffer with the output
-	if runconf.WaitOutput {
+		// There's a docker bug where Attach prematurely exits.
+		// To prevent that we DO allow an attach to also wait for
+		// the container to exit.
+		if runconf.WaitOutput {
+			_, err = d.client.WaitContainer(cont.ID)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+
+		return nil, cont.ID, nil
+	} else if runconf.WaitOutput {
+		// wait for result and return a buffer with the output
+
 		_, err = d.client.WaitContainer(cont.ID)
 		if err != nil {
 			return nil, "", err
