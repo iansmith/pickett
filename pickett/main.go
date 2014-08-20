@@ -154,7 +154,6 @@ func main() {
 		err = pickett.CmdWipe(args[1:], config)
 	default:
 		usage()
-		os.Exit(1)
 	}
 
 	if err != nil {
@@ -176,6 +175,6 @@ func usage() {
 - stop [topology.node]            Stop all or a specific node. 
 - drop [topology.node]            Stop and delete all or a specific node. 
 - wipe [tags]                     Delete all or specified tags (forces rebuild next time)`)
-	fmt.Print(error)
+	fmt.Println(error)
 	os.Exit(1)
 }
