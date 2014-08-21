@@ -203,6 +203,8 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 
 	host.Privileged = runconf.Privileged
 
+	flog.Debugf("[docker cmd] %s%s", fordebug.Bytes(), strings.Join(config.Cmd, " "))
+
 	err = d.client.StartContainer(cont.ID, host)
 	if err != nil {
 		return nil, "", err
