@@ -38,7 +38,10 @@ func statusInstances(topoName string, nodeName string, config *Config) (map[int]
 	}
 
 	contPath := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS)
-	topos, err := config.etcd.Children(contPath)
+	topos, found, err := config.etcd.Children(contPath)
+	if !found {
+		return nil, nil //nothing found at this level
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +51,10 @@ func statusInstances(topoName string, nodeName string, config *Config) (map[int]
 	result := make(map[int]string)
 
 	nodePath := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, topoName)
-	nodes, err := config.etcd.Children(nodePath)
+	nodes, found, err := config.etcd.Children(nodePath)
+	if !found {
+		return result, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%v, maybe you've never run anything before?", err)
 	}
@@ -56,7 +62,10 @@ func statusInstances(topoName string, nodeName string, config *Config) (map[int]
 		return result, nil
 	}
 	instPath := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, topoName, nodeName)
-	instances, err := config.etcd.Children(instPath)
+	instances, found, err := config.etcd.Children(instPath)
+	if !found {
+		return result, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +102,7 @@ func CmdBuild(targets []string, config *Config) error {
 		toBuild = []string{}
 		for _, targ := range targets {
 			if !contains(buildables, targ) {
-				fmt.Errorf("%s is not buildable, ignoring", targ)
+				flog.Errorf("%s is not buildable, ignoring", targ)
 				continue
 			}
 			toBuild = append(toBuild, targ)
@@ -133,6 +142,8 @@ func CmdStatus(targets []string, config *Config) error {
 		for _, targ := range targets {
 			if contains(all, targ) {
 				buildStatus = append(buildStatus, targ)
+			} else {
+				flog.Errorf("unknown target %s (should be one of %s)", targ, all)
 			}
 		}
 	}
@@ -154,9 +165,12 @@ func CmdStatus(targets []string, config *Config) error {
 			panic(fmt.Sprintf("can't understand the target %s", target))
 		}
 		instances, err := statusInstances(pair[0], pair[1], config)
-		flog.Infof("XXX %s checked ... %d", target, len(instances))
 		if err != nil {
 			return err
+		}
+		if len(instances) == 0 {
+			fmt.Printf("%-25s | %-31s\n", target, "not found")
+			continue
 		}
 		for i, cont := range instances {
 			extra := fmt.Sprintf("[%d]", i)
@@ -224,7 +238,7 @@ func CmdDrop(targets []string, config *Config) error {
 			}
 			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
 			oldId, err := config.etcd.Del(key)
-			if err != nil || oldId != contId {
+			if err != nil || oldId[1:] != contId {
 				if err != nil {
 					return err
 				}
