@@ -106,6 +106,7 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()
+		os.Exit(0)
 	}
 
 	var logFilterLvl logit.Level
@@ -152,8 +153,12 @@ func main() {
 		err = pickett.CmdDrop(args[1:], config)
 	case "wipe":
 		err = pickett.CmdWipe(args[1:], config)
+	case "help":
+		usage()
+		os.Exit(0)
 	default:
 		usage()
+		os.Exit(1)
 	}
 
 	if err != nil {
@@ -174,7 +179,7 @@ func usage() {
 - build [tags]                    Build all tags or specified tags. 
 - stop [topology.node]            Stop all or a specific node. 
 - drop [topology.node]            Stop and delete all or a specific node. 
-- wipe [tags]                     Delete all or specified tags (forces rebuild next time)`)
+- wipe [tags]                     Delete all or specified tags (forces rebuild next time)
+- help                            Print this help message`)
 	fmt.Println(error)
-	os.Exit(1)
 }
