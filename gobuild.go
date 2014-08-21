@@ -197,6 +197,7 @@ func (s *sourceDirChecker) Check(config *Config, path string) (time.Time, error)
 	flog.Infof("XXXX checking directory %s versus timestamp %v", path, s.target)
 	t, err := config.helper.LastTimeInDirRelative(path)
 	if err != nil {
+		flog.Errorf("checking timestamp failed during sourceDirChecker: %v, %v", path, err)
 		return time.Time{}, err
 	}
 	flog.Infof("XXXX got %v %v", t, t.After(s.target))
