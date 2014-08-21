@@ -79,6 +79,7 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 		if err != nil {
 			return err
 		}
+		flog.Infof("XXXXX form container key for starting image %s: %s, cont=%s", image, formContainerKey(p.r, topoName, instance), insp.ContainerName())
 		if _, err = etcd.Put(formContainerKey(p.r, topoName, instance), insp.ContainerName()); err != nil {
 			return err
 		}

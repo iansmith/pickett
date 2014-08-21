@@ -166,9 +166,8 @@ func main() {
 		flog.Errorf("%s: %v", args[0], err)
 		logit.Flush(time.Millisecond * 300)
 		os.Exit(1)
-	} else {
-		os.Exit(0)
 	}
+	os.Exit(0)
 }
 
 func usage() {
