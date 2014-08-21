@@ -117,7 +117,7 @@ func main() {
 	}
 	logit.Global.ModifyFilterLvl("stdout", logFilterLvl, nil, nil)
 
-	defer logit.Flush(time.Millisecond * 300)
+	defer logit.Flush(1000 * time.Millisecond)
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -126,18 +126,19 @@ func main() {
 
 	_, err = os.Open(filepath.Join(wd, configFile))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "can't find configuration file: %s\n", filepath.Join(wd, configFile))
+		flog.Errorf("can't find configuration file: %s\n", filepath.Join(wd, configFile))
 		os.Exit(1)
 	}
 
 	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
 	if err != nil {
 		flog.Errorf("failed to make IO objects: %v", err)
+		os.Exit(1)
 	}
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
+		flog.Errorf("Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
 		os.Exit(1)
 	}
 	switch args[0] {
@@ -164,9 +165,10 @@ func main() {
 	if err != nil {
 		// Make sure we get flog a chance to flush before exit
 		flog.Errorf("%s: %v", args[0], err)
-		logit.Flush(time.Millisecond * 300)
+		logit.Flush(-1)
 		os.Exit(1)
 	}
+	logit.Flush(-1)
 	os.Exit(0)
 }
 

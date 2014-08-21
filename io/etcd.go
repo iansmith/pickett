@@ -10,7 +10,7 @@ type EtcdClient interface {
 	Get(string) (string, bool, error)
 	Put(string, string) (string, error)
 	Del(string) (string, error)
-	Children(string) ([]string, error)
+	Children(string) ([]string, bool, error)
 }
 
 const (
@@ -36,13 +36,18 @@ func NewEtcdClient() (EtcdClient, error) {
 	}
 	return result, nil
 }
-func (e *etcdClient) Children(path string) ([]string, error) {
+func (e *etcdClient) Children(path string) ([]string, bool, error) {
 	path = filepath.Clean(path)
 	flog.Debugf("[etcd] CHILDREN %s", path)
 	resp, err := e.client.Get(path, false, false)
 	if err != nil {
-		flog.Debugf("[etcd err] %v\n", err)
-		return nil, err
+		detail := err.(*etcd.EtcdError)
+		if detail.ErrorCode == 100 {
+			flog.Debugf("[etcd result] key was not found, so no children")
+			return nil, false, nil
+		}
+		flog.Debugf("[etcd err] %T %+v\n", err, err)
+		return nil, true, err
 	}
 	pathLen := len(path)
 	if !strings.HasSuffix(path, "/") {
@@ -53,7 +58,7 @@ func (e *etcdClient) Children(path string) ([]string, error) {
 		result = append(result, r.Key[pathLen:])
 	}
 	flog.Debugf("[etcd response] %s", result)
-	return result, nil
+	return result, true, nil
 }
 
 func (e *etcdClient) Put(path string, value string) (string, error) {
