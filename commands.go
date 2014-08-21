@@ -366,3 +366,67 @@ func confTargets(config *Config) []string {
 	all = append(all, runnables...)
 	return all
 }
+
+// CmdDestroy stops and removes all containers, and removes all images
+func CmdDestroy(config *Config) error {
+	const Exited = "Exited"
+
+	fmt.Println("clearing etcd")
+
+	resps, found, err := config.etcd.Children("/")
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("Error: could not find '/' in etcd")
+	}
+
+	for _, resp := range resps {
+		_, err := config.etcd.RecursiveDel(resp)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("stopping running containers")
+
+	containers, err := config.cli.ListContainers()
+	if err != nil {
+		return err
+	}
+
+	for _, container := range containers {
+		status := strings.Split(container.Status, " ")
+		if len(status) == 0 || status[0] != Exited {
+			err = config.cli.CmdStop(container.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	fmt.Println("removing containers")
+
+	for _, container := range containers {
+		err = config.cli.CmdRmContainer(container.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("removing images")
+
+	images, err := config.cli.ListImages()
+	if err != nil {
+		return err
+	}
+
+	for _, image := range images {
+		err = config.cli.CmdRmImage(image.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

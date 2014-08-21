@@ -71,6 +71,8 @@ type DockerCli interface {
 	CmdRmImage(string) error
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
+	ListContainers() ([]docker.APIContainers, error)
+	ListImages() ([]docker.APIImages, error)
 }
 
 type InspectedImage interface {
@@ -613,6 +615,14 @@ func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
 	return &contInspect{
 		wrapped: i,
 	}, nil
+}
+
+func (d *dockerCli) ListContainers() ([]docker.APIContainers, error) {
+	return d.client.ListContainers(docker.ListContainersOptions{All: true})
+}
+
+func (d *dockerCli) ListImages() ([]docker.APIImages, error) {
+	return d.client.ListImages(true)
 }
 
 //Wrappers for getting inspections
