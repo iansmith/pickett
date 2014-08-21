@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/igneous-systems/logit"
 
 	"github.com/igneous-systems/pickett/io"
 )
@@ -93,7 +96,8 @@ func CmdBuild(targets []string, config *Config) error {
 		toBuild = []string{}
 		for _, targ := range targets {
 			if !contains(buildables, targ) {
-				fmt.Errorf("%s is not buildable, ignoring", targ)
+				flog.Errorf("%s is not buildable, ignoring", targ)
+				logit.Flush(time.Millisecond * 300)
 				continue
 			}
 			toBuild = append(toBuild, targ)
@@ -133,6 +137,8 @@ func CmdStatus(targets []string, config *Config) error {
 		for _, targ := range targets {
 			if contains(all, targ) {
 				buildStatus = append(buildStatus, targ)
+			} else {
+				flog.Errorf("unknown target %s (should be one of %s)", targ, all)
 			}
 		}
 	}
@@ -154,7 +160,6 @@ func CmdStatus(targets []string, config *Config) error {
 			panic(fmt.Sprintf("can't understand the target %s", target))
 		}
 		instances, err := statusInstances(pair[0], pair[1], config)
-		flog.Infof("XXX %s checked ... %d", target, len(instances))
 		if err != nil {
 			return err
 		}

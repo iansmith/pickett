@@ -194,12 +194,10 @@ func NewSourceDirChecker(t time.Time) *sourceDirChecker {
 //function checks subdirectories, so you should pass the root directory of
 //the check you want to perform.
 func (s *sourceDirChecker) Check(config *Config, path string) (time.Time, error) {
-	flog.Infof("XXXX checking directory %s versus timestamp %v", path, s.target)
 	t, err := config.helper.LastTimeInDirRelative(path)
 	if err != nil {
 		return time.Time{}, err
 	}
-	flog.Infof("XXXX got %v %v", t, t.After(s.target))
 
 	if t.After(s.target) {
 		return t, nil
