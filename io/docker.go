@@ -202,7 +202,6 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	host.PortBindings = convertedMap
 
 	host.Privileged = runconf.Privileged
-	cmd := strings.Trim(fmt.Sprint(s), "[]")
 
 	err = d.client.StartContainer(cont.ID, host)
 	if err != nil {
