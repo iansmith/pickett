@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/igneous-systems/logit"
 
@@ -96,6 +95,11 @@ func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.Etcd
 var flog = logit.NewNestedLoggerFromCaller(logit.Global)
 
 func main() {
+	os.Exit(wrappedMain())
+}
+
+// Wrapped to make os.Exit work well with logit
+func wrappedMain() int {
 	var debug bool
 	var configFile string
 
@@ -116,8 +120,7 @@ func main() {
 		logFilterLvl = logit.INFO
 	}
 	logit.Global.ModifyFilterLvl("stdout", logFilterLvl, nil, nil)
-
-	defer logit.Flush(1000 * time.Millisecond)
+	defer logit.Flush(-1)
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -127,19 +130,19 @@ func main() {
 	_, err = os.Open(filepath.Join(wd, configFile))
 	if err != nil {
 		flog.Errorf("can't find configuration file: %s\n", filepath.Join(wd, configFile))
-		os.Exit(1)
+		return 1
 	}
 
 	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
 	if err != nil {
 		flog.Errorf("failed to make IO objects: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
 	if err != nil {
 		flog.Errorf("Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
-		os.Exit(1)
+		return 1
 	}
 	switch args[0] {
 	case "run":
@@ -156,20 +159,17 @@ func main() {
 		err = pickett.CmdWipe(args[1:], config)
 	case "help":
 		usage()
-		os.Exit(0)
+		return 0
 	default:
 		usage()
-		os.Exit(1)
+		return 1
 	}
 
 	if err != nil {
-		// Make sure we get flog a chance to flush before exit
 		flog.Errorf("%s: %v", args[0], err)
-		logit.Flush(-1)
-		os.Exit(1)
+		return 1
 	}
-	logit.Flush(-1)
-	os.Exit(0)
+	return 0
 }
 
 func usage() {
