@@ -127,6 +127,11 @@ func wrappedMain() int {
 		panic("can't get working directory!")
 	}
 
+	if os.Getenv("DOCKER_HOST") == "" {
+		fmt.Fprintf(os.Stderr, "DOCKER_HOST not set; suggest DOCKER_HOST=tcp://:2375 (for local launcher)\n")
+		return 1
+	}
+
 	_, err = os.Open(filepath.Join(wd, configFile))
 	if err != nil {
 		flog.Errorf("can't find configuration file: %s\n", filepath.Join(wd, configFile))
