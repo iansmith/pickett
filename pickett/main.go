@@ -162,6 +162,10 @@ func wrappedMain() int {
 		err = pickett.CmdDrop(args[1:], config)
 	case "wipe":
 		err = pickett.CmdWipe(args[1:], config)
+	case "ps":
+		err = pickett.CmdPs(args[1:], config)
+	case "inject":
+		err = pickett.CmdInject(args[1:], config)
 	case "help":
 		usage()
 		return 0
@@ -186,6 +190,8 @@ func usage() {
 - stop [topology.node]            Stop all or a specific node. 
 - drop [topology.node]            Stop and delete all or a specific node. 
 - wipe [tags]                     Delete all or specified tags (forces rebuild next time)
+- ps [topology.node]              Give "docker ps"-like output of running topologies
+- inject <topology.node> <cmd>    Run the given command in the given topology node
 - help                            Print this help message`)
 	fmt.Println(error)
 }
