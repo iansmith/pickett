@@ -238,7 +238,8 @@ func (c *Config) Execute(name string) error {
 	}
 
 	for i := 0; i < info.instances; i++ {
-		_, err := info.runner.run(true, c, pair[0], i)
+		// XXXJDH: make the assumption that instanced nodes never want tee'd output (i.e. attaching)
+		_, err := info.runner.run(false, c, pair[0], i)
 		if err != nil {
 			return err
 		}
