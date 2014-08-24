@@ -158,11 +158,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	config.Image = runconf.Image
 
 	fordebug := new(bytes.Buffer)
-	fordebug.WriteString("docker run ")
 	cont, err := d.createNamedContainer(config)
 	if err != nil {
 		return nil, "", err
 	}
+	fordebug.WriteString(fmt.Sprintf("docker run %v ", cont.Name))
 	host := &docker.HostConfig{}
 
 	//flatten links for consumption by go-dockerclient
@@ -231,9 +231,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 		// To prevent that we DO allow an attach to also wait for
 		// the container to exit.
 		if runconf.WaitOutput {
-			_, err = d.client.WaitContainer(cont.ID)
+			status, err := d.client.WaitContainer(cont.ID)
 			if err != nil {
 				return nil, "", err
+			} else if status != 0 {
+				return nil, "", fmt.Errorf("Non-zero exitcode %v from %v", status, cont.Name)
 			}
 		}
 
