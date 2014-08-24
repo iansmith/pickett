@@ -196,6 +196,7 @@ func NewSourceDirChecker(t time.Time) *sourceDirChecker {
 func (s *sourceDirChecker) Check(config *Config, path string) (time.Time, error) {
 	t, err := config.helper.LastTimeInDirRelative(path)
 	if err != nil {
+		flog.Errorf("checking timestamp failed during sourceDirChecker: %v, %v", path, err)
 		return time.Time{}, err
 	}
 
