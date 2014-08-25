@@ -1,15 +1,50 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/igneous-systems/logit"
+	"gopkg.in/alecthomas/kingpin.v1"
 
 	"github.com/igneous-systems/pickett"
 	"github.com/igneous-systems/pickett/io"
+)
+
+var (
+	PickettVersion = "0.0.1"
+
+	app = kingpin.New("Pickett", "Make for the docker world.")
+	// Global flags
+	debug      = app.Flag("debug", "Enable debug mode.").Bool()
+	configFile = app.Flag("configFile", "Config file.").Default("Pickett.json").String()
+
+	// Actions
+	run     = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
+	runTopo = run.Arg("topo", "Topo node.").Required().String()
+
+	status        = app.Command("status", "Shows the status of all the known buildable tags and/or runnable nodes.")
+	statusTargets = status.Arg("targets", "Tags / Nodes").Strings()
+
+	build     = app.Command("build", "Build all tags or specified tags.")
+	buildTags = build.Arg("tags", "Tags").Strings()
+
+	stop      = app.Command("stop", "Stop all or a specific node.")
+	stopNodes = stop.Arg("topology.nodes", "Topology Nodes").Strings()
+
+	drop      = app.Command("drop", "Stop and delete all or specific node.")
+	dropNodes = drop.Arg("topology.nodes", "Topology Nodes").Strings()
+
+	wipe     = app.Command("wipe", "Delete all or specified tag (force rebuild next time).")
+	wipeTags = wipe.Arg("tags", "Tags").Strings()
+
+	ps      = app.Command("ps", "Give 'docker ps' like output of running topologies.")
+	psNodes = ps.Arg("topology.nodes", "Topology Nodes").Strings()
+
+	inject     = app.Command("inject", "Run the given command in the given topology node")
+	injectNode = inject.Arg("topology.node", "Topology Node").Required().String()
+	injectCmd  = inject.Arg("Cmd", "Node").Required().Strings()
 )
 
 func contains(s []string, target string) bool {
@@ -100,21 +135,13 @@ func main() {
 
 // Wrapped to make os.Exit work well with logit
 func wrappedMain() int {
-	var debug bool
-	var configFile string
 
-	flag.BoolVar(&debug, "debug", false, "turns on verbose logging for pickett developers")
-	flag.StringVar(&configFile, "config", "Pickett.json", "use a custom pickett configuration file")
-	flag.Parse()
+	kingpin.Version(PickettVersion)
 
-	args := flag.Args()
-	if len(args) == 0 {
-		usage()
-		os.Exit(0)
-	}
+	action := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	var logFilterLvl logit.Level
-	if debug {
+	if *debug {
 		logFilterLvl = logit.DEBUG
 	} else {
 		logFilterLvl = logit.INFO
@@ -132,13 +159,13 @@ func wrappedMain() int {
 		return 1
 	}
 
-	_, err = os.Open(filepath.Join(wd, configFile))
+	_, err = os.Open(filepath.Join(wd, *configFile))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "./%s not found (cwd: %s)\n", configFile, wd)
+		fmt.Fprintf(os.Stderr, "./%s not found (cwd: %s)\n", *configFile, wd)
 		return 1
 	}
 
-	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
+	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, *configFile))
 	if err != nil {
 		flog.Errorf("%v", err)
 		return 1
@@ -149,49 +176,32 @@ func wrappedMain() int {
 		flog.Errorf("Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
 		return 1
 	}
-	switch args[0] {
+
+	switch action {
 	case "run":
-		err = pickett.CmdRun(args[1:], config)
+		err = pickett.CmdRun(*runTopo, config)
 	case "build":
-		err = pickett.CmdBuild(args[1:], config)
+		err = pickett.CmdBuild(*buildTags, config)
 	case "status":
-		err = pickett.CmdStatus(args[1:], config)
+		err = pickett.CmdStatus(*statusTargets, config)
 	case "stop":
-		err = pickett.CmdStop(args[1:], config)
+		err = pickett.CmdStop(*stopNodes, config)
 	case "drop":
-		err = pickett.CmdDrop(args[1:], config)
+		err = pickett.CmdDrop(*dropNodes, config)
 	case "wipe":
-		err = pickett.CmdWipe(args[1:], config)
+		err = pickett.CmdWipe(*wipeTags, config)
 	case "ps":
-		err = pickett.CmdPs(args[1:], config)
+		err = pickett.CmdPs(*psNodes, config)
 	case "inject":
-		err = pickett.CmdInject(args[1:], config)
-	case "help":
-		usage()
-		return 0
+		err = pickett.CmdInject(*injectNode, *injectCmd, config)
 	default:
-		usage()
+		app.Usage(os.Stderr)
 		return 1
 	}
 
 	if err != nil {
-		flog.Errorf("%s: %v", args[0], err)
+		flog.Errorf("%s: %v", action, err)
 		return 1
 	}
 	return 0
-}
-
-func usage() {
-	// There doesn't seem to be a better way to mix flags usage with arguments usage ?
-	error := fmt.Errorf(`Usage of pickett, expected an action as the first argument, one of:
-- run [topology.node]             Runs a specific node in a topology, including all depedencies. 
-- status [tags or topology.node]  Shows the status of all the known buildable tags and/or runnable nodes. 
-- build [tags]                    Build all tags or specified tags. 
-- stop [topology.node]            Stop all or a specific node. 
-- drop [topology.node]            Stop and delete all or a specific node. 
-- wipe [tags]                     Delete all or specified tags (forces rebuild next time)
-- ps [topology.node]              Give "docker ps"-like output of running topologies
-- inject <topology.node> <cmd>    Run the given command in the given topology node
-- help                            Print this help message`)
-	fmt.Println(error)
 }
