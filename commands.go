@@ -14,15 +14,8 @@ import (
 
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(targets []string, config *Config) error {
-	_, runnables := config.EntryPoints()
-	if len(targets) == 0 {
-		return fmt.Errorf("must supply a target to run (one of %s)\n", strings.Trim(fmt.Sprint(runnables), "[]"))
-	}
-	if len(targets) > 1 {
-		return fmt.Errorf("too many arguments to run--can only run one target at a time\n")
-	}
-	return config.Execute(targets[0])
+func CmdRun(target string, config *Config) error {
+	return config.Execute(target)
 }
 
 //return value is a bit tricky here for the primary return.  If it's nil
@@ -288,7 +281,7 @@ func CmdPs(targets []string, config *Config) error {
 	selected := chosenRunnables(config, targets)
 	w := tabwriter.NewWriter(os.Stdout, 20, 1, 3, ' ', 0)
 	fmt.Fprint(w, "TARGET\tNAME\tCONTAINER ID\n")
-	for _,target := range selected {
+	for _, target := range selected {
 		pair := strings.Split(target, ".")
 		if len(pair) != 2 {
 			panic(fmt.Sprintf("can't understand the target %s", target))
@@ -312,23 +305,18 @@ func CmdPs(targets []string, config *Config) error {
 	return nil
 }
 
-func CmdInject(targets []string, config *Config) error {
-	if len(targets) == 0 {
-		panic("Must supply a target for inject")
-	}
+func CmdInject(target string, cmds []string, config *Config) error {
 
-	breakout := strings.Replace(targets[0], ".", "/", -1)
+	breakout := strings.Replace(target, ".", "/", -1)
 	// NOTE TO SELF: write a tree-ish function that returns an enumeration/array of topo nodes
 	cont, found, err := config.etcd.Get(filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, breakout))
 	if err != nil {
 		return err
 	} else if !found {
-		return fmt.Errorf("No instance information found in etcd, is `%v' running?", targets[0])
+		return fmt.Errorf("No instance information found in etcd, is `%v' running?", target)
 	}
 
-	if strings.HasPrefix(cont, "/") {
-		cont = cont[1:]
-	}
+	strings.TrimPrefix(cont, "/")
 
 	fmt.Printf("Inspecting %v\n", cont)
 	insp, err := config.cli.InspectContainer(cont)
@@ -336,8 +324,8 @@ func CmdInject(targets []string, config *Config) error {
 		return err
 	}
 
-	sudo := fmt.Sprintf("sudo sh -c 'cd /var/lib/docker/execdriver/native/%v && nsinit exec %v'",
-		insp.ContainerID(), strings.Join(targets[1:], " "))
+	sudo := fmt.Sprintf("sudo sh -c 'cd /var/lib/docker/execdriver/native/%s && nsinit exec %s'",
+		insp.ContainerID(), strings.Join(cmds, " "))
 	cmd := exec.Command("vagrant", "ssh", "launcher", "-c", sudo)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
