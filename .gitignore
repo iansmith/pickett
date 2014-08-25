@@ -1,6 +1,9 @@
 # emacs
 *~
 
+# vim
+.*.swp
+
 # vagrant
 .vagrant/*
 
@@ -10,4 +13,5 @@ Godeps
 #coverage
 coverage.out
 
+enable-pickett
 enable-pickett
