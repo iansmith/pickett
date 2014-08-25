@@ -3,6 +3,7 @@ package pickett
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/igneous-systems/pickett/io"
@@ -48,10 +49,8 @@ func defaultPolicy() policy {
 	}
 }
 
-//formContainerKey is a helper for forming the keyname in etcd that corresponds
-//to a particular network's container.
-func formContainerKey(r runner, topoName string, instance int) string {
-	return filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, topoName, r.name(), fmt.Sprint(instance))
+func formKey(key string, r runner, topoName string, instance int) string {
+	return filepath.Join(io.PICKETT_KEYSPACE, key, topoName, r.name(), fmt.Sprint(instance))
 }
 
 //start runs the runner in its policyInput and records the docker container name into etcd.
@@ -79,7 +78,13 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 		if err != nil {
 			return err
 		}
-		if _, err = etcd.Put(formContainerKey(p.r, topoName, instance), insp.ContainerName()); err != nil {
+		if _, err = etcd.Put(formKey(CONTAINERS, p.r, topoName, instance), insp.ContainerName()); err != nil {
+			return err
+		}
+		if _, err = etcd.Put(formKey(IPS, p.r, topoName, instance), insp.Ip()); err != nil {
+			return err
+		}
+		if _, err = etcd.Put(formKey(PORTS, p.r, topoName, instance), strings.Join(insp.Ports(), " ")); err != nil {
 			return err
 		}
 		p.containerName = insp.ContainerName()
@@ -93,7 +98,7 @@ func (p *policyInput) stop(topoName string, instance int, cli io.DockerCli, etcd
 	if err := cli.CmdStop(p.containerName); err != nil {
 		return err
 	}
-	if _, err := etcd.Del(formContainerKey(p.r, topoName, instance)); err != nil {
+	if _, err := etcd.Del(formKey(CONTAINERS, p.r, topoName, instance)); err != nil {
 		return err
 	}
 	return nil
@@ -101,6 +106,8 @@ func (p *policyInput) stop(topoName string, instance int, cli io.DockerCli, etcd
 
 const (
 	CONTAINERS = "containers"
+	IPS        = "ips"
+	PORTS      = "ports"
 )
 
 func (p stopPolicy) String() string {
@@ -223,7 +230,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 //createPolicyInput does the work of interrogating etcd and if necessary docker to figure
 //out the state of services.  It returns a policyInput suitable for applying policy to.
 func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*policyInput, error) {
-	value, present, err := conf.etcd.Get(formContainerKey(r, topoName, instance))
+	value, present, err := conf.etcd.Get(formKey(CONTAINERS, r, topoName, instance))
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +245,7 @@ func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*
 		if err != nil {
 			flog.Debugf("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
-			_, err = conf.etcd.Del(formContainerKey(r, topoName, instance))
+			_, err = conf.etcd.Del(formKey(CONTAINERS, r, topoName, instance))
 			if err != nil {
 				return nil, err
 			}

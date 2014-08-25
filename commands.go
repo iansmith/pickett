@@ -280,7 +280,7 @@ func CmdWipe(targets []string, config *Config) error {
 func CmdPs(targets []string, config *Config) error {
 	selected := chosenRunnables(config, targets)
 	w := tabwriter.NewWriter(os.Stdout, 20, 1, 3, ' ', 0)
-	fmt.Fprint(w, "TARGET\tNAME\tCONTAINER ID\n")
+	fmt.Fprint(w, "TARGET\tNAME\tCONTAINER ID\tIP\nPorts\n")
 	for _, target := range selected {
 		pair := strings.Split(target, ".")
 		if len(pair) != 2 {
@@ -298,7 +298,8 @@ func CmdPs(targets []string, config *Config) error {
 				return err
 			}
 
-			fmt.Fprintf(w, "%s.%v\t%s\t%s\n", target, i, insp.ContainerName()[1:], insp.ContainerID())
+			fmt.Fprintf(w, "%s.%v\t%s\t%s\t%s\t%v\n", target, i, insp.ContainerName()[1:], insp.ContainerID()[:12],
+				insp.Ip(), insp.Ports())
 		}
 	}
 	w.Flush()
