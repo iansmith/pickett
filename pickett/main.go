@@ -134,13 +134,13 @@ func wrappedMain() int {
 
 	_, err = os.Open(filepath.Join(wd, configFile))
 	if err != nil {
-		flog.Errorf("can't find configuration file: %s\n", filepath.Join(wd, configFile))
+		fmt.Fprintf(os.Stderr, "./%s not found (cwd: %s)\n", configFile, wd)
 		return 1
 	}
 
 	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, configFile))
 	if err != nil {
-		flog.Errorf("failed to make IO objects: %v", err)
+		flog.Errorf("%v", err)
 		return 1
 	}
 	reader := helper.ConfigReader()
