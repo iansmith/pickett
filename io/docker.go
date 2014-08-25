@@ -83,6 +83,7 @@ type InspectedContainer interface {
 	Running() bool
 	CreatedTime() time.Time
 	ContainerName() string
+	ContainerID() string
 	ExitStatus() int
 }
 
@@ -635,6 +636,10 @@ func (c *contInspect) Running() bool {
 
 func (c *contInspect) ContainerName() string {
 	return c.wrapped.Name
+}
+
+func (c *contInspect) ContainerID() string {
+	return c.wrapped.ID
 }
 
 func (c *contInspect) ExitStatus() int {
