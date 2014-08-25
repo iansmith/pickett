@@ -4,9 +4,9 @@
 package io
 
 import (
-	bytes "bytes"
-	gomock "code.google.com/p/gomock/gomock"
 	time "time"
+	gomock "code.google.com/p/gomock/gomock"
+	bytes "bytes"
 )
 
 // Mock of DockerCli interface
@@ -251,6 +251,16 @@ func (_m *MockInspectedContainer) ContainerName() string {
 
 func (_mr *_MockInspectedContainerRecorder) ContainerName() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerName")
+}
+
+func (_m *MockInspectedContainer) ContainerID() string {
+	ret := _m.ctrl.Call(_m, "ContainerID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+func (_mr *_MockInspectedContainerRecorder) ContainerID() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ContainerID")
 }
 
 func (_m *MockInspectedContainer) ExitStatus() int {

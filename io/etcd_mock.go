@@ -62,11 +62,12 @@ func (_mr *_MockEtcdClientRecorder) Del(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Del", arg0)
 }
 
-func (_m *MockEtcdClient) Children(_param0 string) ([]string, error) {
+func (_m *MockEtcdClient) Children(_param0 string) ([]string, bool, error) {
 	ret := _m.ctrl.Call(_m, "Children", _param0)
 	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 func (_mr *_MockEtcdClientRecorder) Children(arg0 interface{}) *gomock.Call {
