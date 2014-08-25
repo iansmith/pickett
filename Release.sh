@@ -10,12 +10,12 @@ fi
 # Capture git rev for the binary versioning
 COMMIT=$(git rev-parse HEAD)
 
-# Force the building of linux_amd64 binary
+# Force the building of linux_amd64 and darwin_amd64 binaries
 for os in linux darwin; do
 	export GOOS=$os
 	export GOARCH=amd64
 
-	OUTPUT=pickett-$GOOS-$GOARCH-$COMMIT 
+	OUTPUT=pickett-$GOOS-$GOARCH-$COMMIT
 	RELURL=http://igneous-dev.s3.amazonaws.com/pickett-releases/$OUTPUT.bin
 
 	go build -o $OUTPUT ./pickett
