@@ -334,6 +334,19 @@ func CmdInject(target string, cmds []string, config *Config) error {
 	return cmd.Run()
 }
 
+func CmdEtcdGet(key string, config *Config) error {
+	val, found, err := config.etcd.Get(filepath.Join(io.PICKETT_KEYSPACE, "STATE", key))
+	if found && err != nil {
+		fmt.Println(val)
+	}
+	return err
+}
+
+func CmdEtcdPut(key string, val string, config *Config) error {
+	_, err := config.etcd.Put(filepath.Join(io.PICKETT_KEYSPACE, "STATE", key), val)
+	return err
+}
+
 // checkTargets check the targets against the targets found in the config,
 // returns an error if it's not matching, nil otherwise
 func checkTargets(config *Config, targets []string) error {
