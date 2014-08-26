@@ -77,57 +77,6 @@ func makeIOObjects(path string) (io.Helper, io.DockerCli, io.EtcdClient, io.Virt
 	return helper, cli, etcd, vbox, nil
 }
 
-// trueMain is the entry point of the program with the targets filled in
-// and a working helper.
-func trueMain(targets []string, helper io.Helper, cli io.DockerCli, etcd io.EtcdClient, vbox io.VirtualBox) error {
-	reader := helper.ConfigReader()
-	config, err := pickett.NewConfig(reader, helper, cli, etcd, vbox)
-	if err != nil {
-		return fmt.Errorf("can't understand config file %s: %v", helper.ConfigFile(), err)
-	}
-	buildables, runnables := config.EntryPoints()
-	run := false
-	runTarget := ""
-
-	// if you don't tell us what to build, we build everything with no outgoing
-	// edges, the "root" of a backchain
-	if len(targets) == 0 {
-		targets = buildables
-	} else {
-		//if you do tell us, we need know if it's runnable
-		for _, t := range targets {
-			if contains(buildables, t) {
-				continue
-			}
-			if contains(runnables, t) {
-				if run {
-					return fmt.Errorf("can only run one target (%s and %s both runnable)", runTarget, t)
-				}
-				run = true
-				runTarget = t
-				continue
-			}
-			return fmt.Errorf("don't know anything about target %s", t)
-		}
-	}
-	for _, target := range targets {
-		if target == runTarget {
-			continue
-		}
-		err := config.Build(target)
-		if err != nil {
-			return fmt.Errorf("an error occurred while building target '%v': %v", target, err)
-		}
-	}
-	if runTarget != "" {
-		err = config.Execute(runTarget)
-		if err != nil {
-			return fmt.Errorf("an error occurred while running target '%v': %v", runTarget, err)
-		}
-	}
-	return nil
-}
-
 var flog = logit.NewNestedLoggerFromCaller(logit.Global)
 
 func main() {
