@@ -85,6 +85,8 @@ type InspectedContainer interface {
 	ContainerName() string
 	ContainerID() string
 	ExitStatus() int
+	Ip() string
+	Ports() []string
 }
 
 //NewDocker returns a connection to the docker server.  Pickett assumes that
@@ -624,6 +626,18 @@ func (i *imageInspect) ID() string {
 
 func (i *imageInspect) ContainerID() string {
 	return i.wrapped.Container
+}
+
+func (c *contInspect) Ip() string {
+	return c.wrapped.NetworkSettings.IPAddress
+}
+
+func (c *contInspect) Ports() []string {
+	ports := []string{}
+	for k, _ := range c.wrapped.NetworkSettings.Ports {
+		ports = append(ports, k.Port())
+	}
+	return ports
 }
 
 func (c *contInspect) CreatedTime() time.Time {

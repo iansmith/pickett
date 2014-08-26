@@ -280,7 +280,7 @@ func CmdWipe(targets []string, config *Config) error {
 func CmdPs(targets []string, config *Config) error {
 	selected := chosenRunnables(config, targets)
 	w := tabwriter.NewWriter(os.Stdout, 20, 1, 3, ' ', 0)
-	fmt.Fprint(w, "TARGET\tNAME\tCONTAINER ID\n")
+	fmt.Fprint(w, "TARGET\tNAME\tCONTAINER ID\tIP\tPorts\n")
 	for _, target := range selected {
 		pair := strings.Split(target, ".")
 		if len(pair) != 2 {
@@ -298,7 +298,8 @@ func CmdPs(targets []string, config *Config) error {
 				return err
 			}
 
-			fmt.Fprintf(w, "%s.%v\t%s\t%s\n", target, i, insp.ContainerName()[1:], insp.ContainerID())
+			fmt.Fprintf(w, "%s.%v\t%s\t%s\t%s\t%v\n", target, i, insp.ContainerName()[1:], insp.ContainerID()[:12],
+				insp.Ip(), insp.Ports())
 		}
 	}
 	w.Flush()
@@ -332,6 +333,21 @@ func CmdInject(target string, cmds []string, config *Config) error {
 	cmd.Stderr = os.Stderr
 	fmt.Printf("==> launcher:  %v\n", sudo)
 	return cmd.Run()
+}
+
+// CmdEtcdGet is used to retrieve a value from Etcd, given it's full key path
+func CmdEtcdGet(key string, config *Config) error {
+	val, found, err := config.etcd.Get(key)
+	if found && err != nil {
+		fmt.Println(val)
+	}
+	return err
+}
+
+// CmdEtcdPut is used to store a value in Etcd at the given it's full key path
+func CmdEtcdPut(key string, val string, config *Config) error {
+	_, err := config.etcd.Put(key, val)
+	return err
 }
 
 // checkTargets check the targets against the targets found in the config,

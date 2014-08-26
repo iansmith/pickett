@@ -46,6 +46,12 @@ var (
 	inject     = app.Command("inject", "Run the given command in the given topology node")
 	injectNode = inject.Arg("topology.node", "Topology Node").Required().String()
 	injectCmd  = inject.Arg("Cmd", "Node").Required().Strings()
+
+	etcdGet    = app.Command("etcdget", "Get a value from Pickett's Etcd store.")
+	etcdGetKey = etcdGet.Arg("key", "Etcd key (full path)").Required().String()
+	etcdSet    = app.Command("etcdset", "Set a key/value pair in Pickett's Etcd store.")
+	etcdSetKey = etcdSet.Arg("key", "Etcd key (full path)").Required().String()
+	etcdSetVal = etcdSet.Arg("value", "Etcd value").Required().String()
 )
 
 func contains(s []string, target string) bool {
@@ -195,6 +201,19 @@ func wrappedMain() int {
 		err = pickett.CmdPs(*psNodes, config)
 	case "inject":
 		err = pickett.CmdInject(*injectNode, *injectCmd, config)
+	case "etcdget":
+		val, _, err := etcd.Get(*etcdGetKey)
+		if err != nil {
+			fmt.Print(err)
+			return 1
+		}
+		fmt.Print(val)
+	case "etcdset":
+		_, err := etcd.Put(*etcdSetKey, *etcdSetVal)
+		if err != nil {
+			fmt.Print(err)
+			return 1
+		}
 	default:
 		app.Usage(os.Stderr)
 		return 1
