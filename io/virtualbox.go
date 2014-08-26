@@ -25,13 +25,13 @@ type vboxManage struct {
 }
 
 func NewVirtualBox() (VirtualBox, error) {
-	p, err := exec.LookPath("vboxmanage")
-	if err != nil {
+	vbox := &vboxManage{}
+	var err error
+	vbox.vboxmanage, err = exec.LookPath("vboxmanage")
+	if err != nil && vbox.NeedPathTranslation() {
 		return nil, PATH_BUSTED
 	}
-	return &vboxManage{
-		vboxmanage: p,
-	}, nil
+	return vbox, nil
 }
 
 //NeedPathTranslation returns true if you are talking to
