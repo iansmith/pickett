@@ -16,9 +16,10 @@ var (
 	PickettVersion = "0.0.1"
 
 	app = kingpin.New("Pickett", "Make for the docker world.")
+
 	// Global flags
-	debug      = app.Flag("debug", "Enable debug mode.").Bool()
-	configFile = app.Flag("configFile", "Config file.").Default("Pickett.json").String()
+	debug      = app.Flag("debug", "Enable debug mode.").Short('d').Bool()
+	configFile = app.Flag("configFile", "Config file.").Short('c').Default("Pickett.json").String()
 
 	// Actions
 	run     = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
