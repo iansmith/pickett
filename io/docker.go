@@ -222,6 +222,7 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 	if runconf.Attach {
 		//These are the right settings if you want to "watch" the output of the command and wait for
 		//it to terminate
+
 		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
 			Container:    cont.ID,
 			OutputStream: os.Stdout,

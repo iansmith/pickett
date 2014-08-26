@@ -17,7 +17,7 @@
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
 			"Comment": "0.2.1-207-g942ac38",
-			"Rev": "942ac38da9c51041240b1d20156eb38b0f085734"
+			"Rev": "e39645cc51597cb0d96d8e23e0b2fce46f5f76ab"
 		},
 		{
 			"ImportPath": "github.com/igneous-systems/logit",
