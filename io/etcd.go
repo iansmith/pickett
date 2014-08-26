@@ -1,9 +1,10 @@
 package io
 
 import (
-	"github.com/coreos/go-etcd/etcd"
 	"path/filepath"
 	"strings"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 type EtcdClient interface {

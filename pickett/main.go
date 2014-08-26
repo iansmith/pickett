@@ -47,9 +47,9 @@ var (
 	injectCmd  = inject.Arg("Cmd", "Node").Required().Strings()
 
 	etcdGet    = app.Command("etcdget", "Get a value from Pickett's Etcd store.")
-	etcdGetKey = etcdGet.Arg("key", "Etcd key").Required().String()
+	etcdGetKey = etcdGet.Arg("key", "Etcd key (full path)").Required().String()
 	etcdSet    = app.Command("etcdset", "Set a key/value pair in Pickett's Etcd store.")
-	etcdSetKey = etcdSet.Arg("key", "Etcd key").Required().String()
+	etcdSetKey = etcdSet.Arg("key", "Etcd key (full path)").Required().String()
 	etcdSetVal = etcdSet.Arg("value", "Etcd value").Required().String()
 )
 

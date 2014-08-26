@@ -335,16 +335,18 @@ func CmdInject(target string, cmds []string, config *Config) error {
 	return cmd.Run()
 }
 
+// CmdEtcdGet is used to retrieve a value from Etcd, given it's full key path
 func CmdEtcdGet(key string, config *Config) error {
-	val, found, err := config.etcd.Get(filepath.Join(io.PICKETT_KEYSPACE, "STATE", key))
+	val, found, err := config.etcd.Get(path)
 	if found && err != nil {
 		fmt.Println(val)
 	}
 	return err
 }
 
+// CmdEtcdPut is used to store a value in Etcd at the given it's full key path
 func CmdEtcdPut(key string, val string, config *Config) error {
-	_, err := config.etcd.Put(filepath.Join(io.PICKETT_KEYSPACE, "STATE", key), val)
+	_, err := config.etcd.Put(key, val)
 	return err
 }
 
