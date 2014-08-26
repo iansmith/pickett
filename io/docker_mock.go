@@ -4,6 +4,7 @@
 package io
 
 import (
+	tar "archive/tar"
 	bytes "bytes"
 	gomock "code.google.com/p/gomock/gomock"
 	time "time"
@@ -68,24 +69,24 @@ func (_mr *_MockDockerCliRecorder) CmdCommit(arg0, arg1 interface{}) *gomock.Cal
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCommit", arg0, arg1)
 }
 
-func (_m *MockDockerCli) CmdBuild(_param0 *BuildConfig, _param1 string, _param2 string) error {
-	ret := _m.ctrl.Call(_m, "CmdBuild", _param0, _param1, _param2)
+func (_m *MockDockerCli) CmdRetrieve(_param0 *tar.Writer, _param1 *bytes.Buffer, _param2 []*CopyArtifact, _param3 string) error {
+	ret := _m.ctrl.Call(_m, "CmdRetrieve", _param0, _param1, _param2, _param3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockDockerCliRecorder) CmdBuild(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdBuild", arg0, arg1, arg2)
+func (_mr *_MockDockerCliRecorder) CmdRetrieve(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRetrieve", arg0, arg1, arg2, arg3)
 }
 
-func (_m *MockDockerCli) CmdCopy(_param0 map[string]string, _param1 string, _param2 string, _param3 []*CopyArtifact, _param4 string) error {
-	ret := _m.ctrl.Call(_m, "CmdCopy", _param0, _param1, _param2, _param3, _param4)
+func (_m *MockDockerCli) CmdBuildFromTarball(_param0 *BuildConfig, _param1 []byte, _param2 string) error {
+	ret := _m.ctrl.Call(_m, "CmdBuildFromTarball", _param0, _param1, _param2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockDockerCliRecorder) CmdCopy(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdCopy", arg0, arg1, arg2, arg3, arg4)
+func (_mr *_MockDockerCliRecorder) CmdBuildFromTarball(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdBuildFromTarball", arg0, arg1, arg2)
 }
 
 func (_m *MockDockerCli) CmdLastModTime(_param0 map[string]string, _param1 string, _param2 []*CopyArtifact) (time.Time, error) {

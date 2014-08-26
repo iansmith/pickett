@@ -1,6 +1,8 @@
 package pickett
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -83,7 +85,7 @@ func (e *extractionBuilder) ood(conf *Config) (time.Time, bool, error) {
 	}
 
 	if t.Before(inContLast) {
-		fmt.Printf("[pickett] Building %s (out of date with respect to container artifact)\n", e.tag())
+		flog.Infof("Building %s (out of date with respect to container artifact)\n", e.tag())
 		return time.Time{}, true, nil
 	}
 
@@ -157,20 +159,91 @@ func (e *extractionBuilder) build(conf *Config) (time.Time, error) {
 
 	var err error
 
+	//
+	// Figure out what extraction portions are in the source
+	//
 	_, realPathSource, err := e.getSourceExtractions(conf)
 	if err != nil {
 		return time.Time{}, err
 	}
 
+	//
+	// Convert to a list of io.CopyArtifact instances
+	//
 	art, err := e.toCopyArtifacts()
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	err = conf.cli.CmdCopy(realPathSource, e.runIn.name, e.mergeWith.name, art, e.tag())
-	if err != nil {
+	//these turn out to be where we are stuffing all these bytes
+	var buf, dockerfile bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	dockerfile.WriteString(fmt.Sprintf("FROM %s\n", e.mergeWith.name))
+
+	//this will have all the artifacts that are NOT in the source
+	//code
+	retreivableArtifacts := []*io.CopyArtifact{}
+
+	//for all the artifacts, check to see if they are in the source
+	//tree, and put them into the tarball "by hand" ... you can't
+	//use CmdRetreive on these artifacts because they are not part of
+	//any image...
+
+	for _, a := range art {
+		truePath, found := realPathSource[a.SourcePath]
+		if found {
+			isFile, err := conf.helper.CopyFileToTarball(tw, truePath, a.SourcePath)
+			if err != nil {
+				return time.Time{}, err
+			}
+			//kinda hacky: we use a.SourcePath as the name *inside* the tarball
+			flog.Debugf("COPY %s TO %s.", a.SourcePath, a.DestinationDir)
+			dockerfile.WriteString(fmt.Sprintf("COPY %s %s\n", a.SourcePath, a.DestinationDir))
+			if !isFile {
+				if err := conf.helper.CopyDirToTarball(tw, truePath, a.SourcePath); err != nil {
+					return time.Time{}, err
+				}
+			}
+		} else {
+			//these are NOT in the source code because we didn't find them
+			//in the map realPathSource
+			retreivableArtifacts = append(retreivableArtifacts, a)
+		}
+	}
+
+	//add any retreivable artifacts to the tarball WOS
+	if len(retreivableArtifacts) > 0 {
+		if err = conf.cli.CmdRetrieve(tw, &dockerfile, retreivableArtifacts, e.runIn.name); err != nil {
+			return time.Time{}, err
+		}
+	}
+
+	//everything that's going to be pulled is now in tw, can put the
+	//dockerfile in and finish writing
+	if err = tw.WriteHeader(&tar.Header{
+		Name: "/Dockerfile",
+		Size: int64(dockerfile.Len()),
+	}); err != nil {
 		return time.Time{}, err
 	}
+	if _, err = tw.Write(dockerfile.Bytes()); err != nil {
+		return time.Time{}, err
+	}
+	if err = tw.Close(); err != nil {
+		return time.Time{}, err
+	}
+
+	//
+	//now can send to docker for a build
+	//
+	opts := &io.BuildConfig{true, true}
+	if err = conf.cli.CmdBuildFromTarball(opts, buf.Bytes(), e.tag()); err != nil {
+		return time.Time{}, err
+	}
+
+	//
+	// Need a time for the result
+	//
 	insp, err := conf.cli.InspectImage(e.tag())
 	if err != nil {
 		return time.Time{}, err

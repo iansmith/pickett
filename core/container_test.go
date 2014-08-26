@@ -26,7 +26,6 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	helper := io.NewMockHelper(controller)
 	etcd := io.NewMockEtcdClient(controller)
 
-	//for reading the conf
 	helper.EXPECT().OpenDockerfileRelative(MYDIR).Return(nil, nil)
 
 	//fake out the directory "true" path
@@ -53,8 +52,8 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	first := cli.EXPECT().InspectImage(BLETCH).Return(hourStamp, nil)
 	cli.EXPECT().InspectImage(BLETCH).Return(nowStamp, nil).After(first)
 
-	//get this after the first time check comparing directry time to hourStamp
-	cli.EXPECT().CmdBuild(gomock.Any(), DIR, BLETCH).Return(nil)
+	helper.EXPECT().CopyDirToTarball(gomock.Any(), DIR, "").Return(nil)
+	cli.EXPECT().CmdBuildFromTarball(gomock.Any(), gomock.Any(), BLETCH).Return(nil)
 
 	///
 	//at start, we don't know antyhing about the time

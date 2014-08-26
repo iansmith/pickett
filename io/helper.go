@@ -1,7 +1,10 @@
 package io
 
 import (
+	"archive/tar"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,6 +20,8 @@ type Helper interface {
 	ConfigFile() string
 	LastTimeInDirRelative(string) (time.Time, error)
 	LastTimeInDir(string) (time.Time, error)
+	CopyFileToTarball(*tar.Writer, string, string) (bool, error)
+	CopyDirToTarball(*tar.Writer, string, string) error
 }
 
 // NewHelper creates an implementation of the Helper that runs against
@@ -117,6 +122,76 @@ func lastTimeInADirTree(path string, bestSoFar time.Time) (time.Time, error) {
 		}
 	}
 	return best, nil
+}
+
+func (h *helper) CopyDirToTarball(tw *tar.Writer, pathToDir string, localName string) error {
+	flog.Debugf("tarball construction in '%s' (as '%s')", pathToDir, localName)
+	dir, err := os.Open(pathToDir)
+	if err != nil {
+		return err
+	}
+	info, err := dir.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("expected %s to be a directory!", dir)
+	}
+	names, err := dir.Readdirnames(0)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		path := filepath.Join(pathToDir, name)
+		lname := filepath.Join(localName, name)
+		isFile, err := h.CopyFileToTarball(tw, path, lname)
+		if err != nil {
+			return err
+		}
+		if !isFile {
+			err := h.CopyDirToTarball(tw, path, filepath.Join(localName, name))
+			if err != nil {
+				return err
+			}
+			continue
+		}
+	}
+	return nil
+}
+
+func (h *helper) CopyFileToTarball(tw *tar.Writer, path string, localName string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if info.IsDir() {
+		return false, nil
+	}
+
+	//now we are sure it's a file
+	hdr := &tar.Header{
+		Name:    localName,
+		Size:    info.Size(),
+		Mode:    int64(info.Mode()),
+		ModTime: info.ModTime(),
+	}
+
+	if err := tw.WriteHeader(hdr); err != nil {
+		return false, err
+	}
+	fp, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	content, err := ioutil.ReadAll(fp)
+	if err != nil {
+		return false, err
+	}
+	if _, err := tw.Write(content); err != nil {
+		return false, err
+	}
+	flog.Debugf("added %s as %s to tarball", path, localName)
+	return true, nil
 }
 
 func contains(items []string, item string) bool {

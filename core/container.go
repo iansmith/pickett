@@ -1,6 +1,8 @@
 package pickett
 
 import (
+	"archive/tar"
+	"bytes"
 	"github.com/igneous-systems/pickett/io"
 	"time"
 )
@@ -91,9 +93,17 @@ func (d *containerBuilder) build(config *Config) (time.Time, error) {
 	dirName := config.helper.DirectoryRelative(d.dir)
 	flog.Infof("Building tarball in %s", d.dir)
 
-	//now can send it to the server
-	err := config.cli.CmdBuild(opts, dirName, d.tag())
+	//build tarball
+	out := new(bytes.Buffer)
+	tw := tar.NewWriter(out)
+	err := config.helper.CopyDirToTarball(tw, dirName, "")
 	if err != nil {
+		return time.Time{}, err
+	}
+	if err := tw.Close(); err != nil {
+		return time.Time{}, err
+	}
+	if err = config.cli.CmdBuildFromTarball(opts, out.Bytes(), d.tag()); err != nil {
 		return time.Time{}, err
 	}
 

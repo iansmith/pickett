@@ -7,6 +7,7 @@ import (
 	io "io"
 	os "os"
 	time "time"
+	tar "archive/tar"
 	gomock "code.google.com/p/gomock/gomock"
 )
 
@@ -103,4 +104,25 @@ func (_m *MockHelper) LastTimeInDir(_param0 string) (time.Time, error) {
 
 func (_mr *_MockHelperRecorder) LastTimeInDir(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "LastTimeInDir", arg0)
+}
+
+func (_m *MockHelper) CopyFileToTarball(_param0 *tar.Writer, _param1 string, _param2 string) (bool, error) {
+	ret := _m.ctrl.Call(_m, "CopyFileToTarball", _param0, _param1, _param2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockHelperRecorder) CopyFileToTarball(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CopyFileToTarball", arg0, arg1, arg2)
+}
+
+func (_m *MockHelper) CopyDirToTarball(_param0 *tar.Writer, _param1 string, _param2 string) error {
+	ret := _m.ctrl.Call(_m, "CopyDirToTarball", _param0, _param1, _param2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockHelperRecorder) CopyDirToTarball(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CopyDirToTarball", arg0, arg1, arg2)
 }
