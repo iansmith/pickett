@@ -337,7 +337,7 @@ func CmdInject(target string, cmds []string, config *Config) error {
 
 // CmdEtcdGet is used to retrieve a value from Etcd, given it's full key path
 func CmdEtcdGet(key string, config *Config) error {
-	val, found, err := config.etcd.Get(path)
+	val, found, err := config.etcd.Get(key)
 	if found && err != nil {
 		fmt.Println(val)
 	}
