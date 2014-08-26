@@ -151,6 +151,28 @@ func (_mr *_MockDockerCliRecorder) InspectContainer(arg0 interface{}) *gomock.Ca
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "InspectContainer", arg0)
 }
 
+func (_m *MockDockerCli) ListContainers() (apiContainers, error) {
+	ret := _m.ctrl.Call(_m, "ListContainers")
+	ret0, _ := ret[0].(apiContainers)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockDockerCliRecorder) ListContainers() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ListContainers")
+}
+
+func (_m *MockDockerCli) ListImages() (apiImages, error) {
+	ret := _m.ctrl.Call(_m, "ListImages")
+	ret0, _ := ret[0].(apiImages)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockDockerCliRecorder) ListImages() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ListImages")
+}
+
 // Mock of InspectedImage interface
 type MockInspectedImage struct {
 	ctrl     *gomock.Controller
