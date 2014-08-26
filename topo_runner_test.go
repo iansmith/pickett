@@ -279,6 +279,17 @@ func TestMultipleInstances(T *testing.T) {
 	hendrixCont.EXPECT().Running().Return(true).Times(2)
 	hendrixCont.EXPECT().CreatedTime().Return(oneMinAgo).Times(2)
 
+	//we need to handle the queries about part3
+	vanZant0 := io.NewMockInspectedContainer(controller)
+	vanZant0.EXPECT().ContainerName().Return("rvanzant0").Times(2)
+	vanZant1 := io.NewMockInspectedContainer(controller)
+	vanZant1.EXPECT().ContainerName().Return("rvanzant1").Times(2)
+	cli.EXPECT().InspectContainer("p3cont0").Return(vanZant0, nil)
+	cli.EXPECT().InspectContainer("p3cont1").Return(vanZant1, nil)
+
+	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/0", "rvanzant0").Return("ignored0", nil)
+	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/1", "rvanzant1").Return("ignored1", nil)
+
 	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd, vbox)
 	if err != nil {
 		T.Fatalf("can't parse legal config file: %v", err)
