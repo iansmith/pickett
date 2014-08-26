@@ -19,7 +19,7 @@ var (
 
 	// Global flags
 	debug      = app.Flag("debug", "Enable debug mode.").Short('d').Bool()
-	configFile = app.Flag("configFile", "Config file.").Short('c').Default("Pickett.json").String()
+	configFile = app.Flag("configFile", "Config file.").Short('f').Default("Pickett.json").String()
 
 	// Actions
 	run     = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
