@@ -90,7 +90,6 @@ type Config struct {
 	helper         pickett_io.Helper
 	cli            pickett_io.DockerCli
 	etcd           pickett_io.EtcdClient
-	vbox           pickett_io.VirtualBox
 }
 
 type topoMap map[string]*topoInfo
@@ -98,7 +97,7 @@ type topoMap map[string]*topoInfo
 // NewCofingFile creates a new instance of configuration, including
 // all the parsing of the config file and validation checking on the
 // items therein.
-func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.DockerCli, etcd pickett_io.EtcdClient, vbox pickett_io.VirtualBox) (*Config, error) {
+func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.DockerCli, etcd pickett_io.EtcdClient) (*Config, error) {
 	all, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all of configuration file: %v", err)
@@ -128,7 +127,6 @@ func NewConfig(reader io.Reader, helper pickett_io.Helper, cli pickett_io.Docker
 	conf.helper = helper
 	conf.cli = cli
 	conf.etcd = etcd
-	conf.vbox = vbox
 
 	//these are the two key OUTPUT datastructures when we are done with
 	//all the parsing parts
@@ -247,21 +245,19 @@ func (c *Config) Execute(name string) error {
 	return nil
 }
 
+// codeVolumes returns a map from container-external to container-internal paths.
 func (c *Config) codeVolumes() (map[string]string, error) {
-
 	results := make(map[string]string)
-
 	for _, v := range c.CodeVolumes {
 		dir := c.helper.DirectoryRelative(v.Directory)
-		path := dir
 		var err error
-		if c.vbox.NeedPathTranslation() {
-			path, err = c.vbox.CodeVolumeToVboxPath(dir)
+		if needsPathTranslation() {
+			dir, err = translatePath(dir)
 			if err != nil {
 				return nil, err
 			}
 		}
-		results[path] = v.MountedAt
+		results[dir] = v.MountedAt
 	}
 	return results, nil
 }

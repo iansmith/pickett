@@ -20,7 +20,7 @@ var example1 = `
 		{
 			"Directory" : "src", //will expand to /home/gredo/src
 			"MountedAt" : "/han",  // stray comma?,
-			"SomeExtra" : "cruft"  
+			"SomeExtra" : "cruft"
 		}
 	],
 	"Containers" : [
@@ -69,7 +69,7 @@ func TestConf(t *testing.T) {
 	//the caller is just opening this for the error return, he ignores the file
 	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)
 
-	c, err := NewConfig(strings.NewReader(example1), helper, cli, nil, nil)
+	c, err := NewConfig(strings.NewReader(example1), helper, cli, nil)
 	if err != nil {
 		t.Fatalf("can't parse legal config file: %v", err)
 	}

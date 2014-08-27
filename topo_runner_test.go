@@ -1,17 +1,18 @@
 package pickett
 
 import (
-	"code.google.com/p/gomock/gomock"
 	"fmt"
-	"github.com/igneous-systems/pickett/io"
 	"strings"
 	"testing"
 	"time"
+
+	"code.google.com/p/gomock/gomock"
+	"github.com/igneous-systems/pickett/io"
 )
 
 var netExample = `
 // example that uses networking... part1 is consumed by part2 and when
-// part2 is done, we want to snapshot part1.  This uses a container 
+// part2 is done, we want to snapshot part1.  This uses a container
 // called part1-image to prove that backchaining works correctly across
 // a run node.
 {
@@ -30,10 +31,10 @@ var netExample = `
 			"Packages": [
 				"mypackage1",
 				"mypackage2"
-			]					
+			]
 		}
 	],
-	"Topologies" : { 
+	"Topologies" : {
 		"somerungraph" : [
 			{
 				"Name" : "part1",
@@ -47,8 +48,8 @@ var netExample = `
 				"EntryPoint": ["/bin/part2.sh"],
 				"Policy":"Always",
 				"Consumes": ["part1"],
-				"CommitOnExit": 
-				{	
+				"CommitOnExit":
+				{
 					"part1":"netexample:after-part1"
 				}
 			}
@@ -79,7 +80,6 @@ func TestMixBuildAndRun(T *testing.T) {
 
 	helper := io.NewMockHelper(controller)
 	cli := io.NewMockDockerCli(controller)
-	vbox := io.NewMockVirtualBox(controller)
 	etcd := io.NewMockEtcdClient(controller)
 
 	//time info
@@ -196,7 +196,7 @@ func TestMixBuildAndRun(T *testing.T) {
 	// ACTUAL TEST PART
 	//
 
-	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd, vbox)
+	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd)
 	if err != nil {
 		T.Fatalf("can't parse legal config file: %v", err)
 	}
@@ -229,7 +229,6 @@ func TestMultipleInstances(T *testing.T) {
 
 	helper := io.NewMockHelper(controller)
 	cli := io.NewMockDockerCli(controller)
-	vbox := io.NewMockVirtualBox(controller)
 	etcd := io.NewMockEtcdClient(controller)
 
 	ignoredInspect := io.NewMockInspectedImage(controller)
@@ -290,7 +289,7 @@ func TestMultipleInstances(T *testing.T) {
 	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/0", "rvanzant0").Return("ignored0", nil)
 	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/1", "rvanzant1").Return("ignored1", nil)
 
-	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd, vbox)
+	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd)
 	if err != nil {
 		T.Fatalf("can't parse legal config file: %v", err)
 	}

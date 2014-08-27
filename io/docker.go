@@ -649,7 +649,7 @@ func (c *contInspect) Running() bool {
 }
 
 func (c *contInspect) ContainerName() string {
-	return c.wrapped.Name
+	return strings.TrimLeft(c.wrapped.Name, "/")
 }
 
 func (c *contInspect) ContainerID() string {

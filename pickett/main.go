@@ -63,24 +63,20 @@ func contains(s []string, target string) bool {
 	return false
 }
 
-func makeIOObjects(path string) (io.Helper, io.DockerCli, io.EtcdClient, io.VirtualBox, error) {
+func makeIOObjects(path string) (io.Helper, io.DockerCli, io.EtcdClient, error) {
 	helper, err := io.NewHelper(path)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("can't read %s: %v", path, err)
+		return nil, nil, nil, fmt.Errorf("can't read %s: %v", path, err)
 	}
 	cli, err := io.NewDockerCli()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to connect to docker server, maybe its not running? %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to connect to docker server, maybe its not running? %v", err)
 	}
 	etcd, err := io.NewEtcdClient()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to connect to etcd, maybe its not running? %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to connect to etcd, maybe its not running? %v", err)
 	}
-	vbox, err := io.NewVirtualBox()
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to run vboxmanage: %v", err)
-	}
-	return helper, cli, etcd, vbox, nil
+	return helper, cli, etcd, nil
 }
 
 var flog = logit.NewNestedLoggerFromCaller(logit.Global)
@@ -121,13 +117,13 @@ func wrappedMain() int {
 		return 1
 	}
 
-	helper, docker, etcd, vbox, err := makeIOObjects(filepath.Join(wd, *configFile))
+	helper, docker, etcd, err := makeIOObjects(filepath.Join(wd, *configFile))
 	if err != nil {
 		flog.Errorf("%v", err)
 		return 1
 	}
 	reader := helper.ConfigReader()
-	config, err := pickett.NewConfig(reader, helper, docker, etcd, vbox)
+	config, err := pickett.NewConfig(reader, helper, docker, etcd)
 	if err != nil {
 		flog.Errorf("Can't understand config file %s: %v", err.Error(), helper.ConfigFile())
 		return 1

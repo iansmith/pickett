@@ -76,9 +76,6 @@ func statusInstances(topoName string, nodeName string, config *Config) (map[int]
 			return nil, err
 		}
 		if found {
-			if strings.HasPrefix(cont, "/") {
-				cont = cont[1:]
-			}
 			result[i] = cont
 		} else {
 			result[i] = ""
@@ -234,7 +231,7 @@ func CmdDrop(targets []string, config *Config) error {
 			}
 			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
 			oldId, err := config.etcd.Del(key)
-			if err != nil || oldId[1:] != contId {
+			if err != nil || oldId != contId {
 				if err != nil {
 					return err
 				}
@@ -298,7 +295,7 @@ func CmdPs(targets []string, config *Config) error {
 				return err
 			}
 
-			fmt.Fprintf(w, "%s.%v\t%s\t%s\t%s\t%v\n", target, i, insp.ContainerName()[1:], insp.ContainerID()[:12],
+			fmt.Fprintf(w, "%s.%v\t%s\t%s\t%s\t%v\n", target, i, insp.ContainerName(), insp.ContainerID()[:12],
 				insp.Ip(), insp.Ports())
 		}
 	}

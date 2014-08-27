@@ -38,7 +38,7 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	helper.EXPECT().DirectoryRelative(MYDIR).Return(DIR)
 
 	//ignoring error is ok because tested in TestConf
-	c, _ := NewConfig(strings.NewReader(example1), helper, cli, etcd, nil)
+	c, _ := NewConfig(strings.NewReader(example1), helper, cli, etcd)
 
 	now := time.Now()
 	thirtyAgo := now.Add(-30 * time.Minute)
