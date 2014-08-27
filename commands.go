@@ -206,7 +206,8 @@ func CmdStop(targets []string, config *Config) error {
 		for _, contId := range instances {
 			insp, err := config.cli.InspectContainer(contId)
 			if err != nil {
-				return err
+				flog.Errorf("Failed to inspect %s, already destroyed ? - %s", contId, err)
+				continue // This can happen, so we should not error out.
 			}
 			if insp.Running() {
 				fmt.Printf("[pickett] trying to stop %s [%s]\n", contId, stop)
@@ -237,7 +238,8 @@ func CmdDrop(targets []string, config *Config) error {
 		}
 		for i, contId := range instances {
 			if err := config.cli.CmdRmContainer(contId); err != nil {
-				return err
+				flog.Errorf("Failed to remove %s, already destroyed ? - %s", contId, err)
+				continue // This can happen, so we should not error out.
 			}
 			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
 			oldId, err := config.etcd.Del(key)
