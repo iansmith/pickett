@@ -371,7 +371,7 @@ func confTargets(config *Config) []string {
 
 // CmdDestroy stops and removes all containers, and removes all images
 func CmdDestroy(config *Config) error {
-	const Exited = "Exited"
+	const Up = "Up"
 
 	fmt.Println("clearing etcd")
 
@@ -384,7 +384,7 @@ func CmdDestroy(config *Config) error {
 	}
 
 	for _, resp := range resps {
-		_, err := config.etcd.RecursiveDel(resp)
+		_, err := config.etcd.RecursiveDel("/" + resp)
 		if err != nil {
 			return err
 		}
@@ -399,7 +399,7 @@ func CmdDestroy(config *Config) error {
 
 	for _, container := range containers {
 		status := strings.Split(container.Status, " ")
-		if len(status) == 0 || status[0] != Exited {
+		if status[0] == Up {
 			err = config.cli.CmdStop(container.ID)
 			if err != nil {
 				return err
@@ -426,7 +426,7 @@ func CmdDestroy(config *Config) error {
 	for _, image := range images {
 		err = config.cli.CmdRmImage(image.ID)
 		if err != nil {
-			return err
+			flog.Debugf(err.Error())
 		}
 	}
 
