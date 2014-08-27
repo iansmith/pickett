@@ -12,6 +12,7 @@ type EtcdClient interface {
 	Put(string, string) (string, error)
 	Del(string) (string, error)
 	Children(string) ([]string, bool, error)
+	RecursiveDel(string) (string, error)
 }
 
 const (
@@ -96,6 +97,21 @@ func (e *etcdClient) Get(path string) (string, bool, error) {
 func (e *etcdClient) Del(path string) (string, error) {
 	flog.Debugf("[etcd] DEL %s", path)
 	resp, err := e.client.Delete(path, false)
+	if err != nil {
+		flog.Debugf("[etcd err] %v", err)
+		return "", err
+	}
+	if resp.PrevNode == nil {
+		flog.Debugf("[etcd result] [none]")
+		return "", nil
+	}
+	flog.Debugf("[etcd result] %s", resp.PrevNode.Value)
+	return resp.PrevNode.Value, nil
+}
+
+func (e *etcdClient) RecursiveDel(path string) (string, error) {
+	flog.Debugf("[etcd] Recursive DEL %s", path)
+	resp, err := e.client.Delete(path, true)
 	if err != nil {
 		flog.Debugf("[etcd err] %v", err)
 		return "", err

@@ -52,6 +52,8 @@ var (
 	etcdSet    = app.Command("etcdset", "Set a key/value pair in Pickett's Etcd store.")
 	etcdSetKey = etcdSet.Arg("key", "Etcd key (full path)").Required().String()
 	etcdSetVal = etcdSet.Arg("value", "Etcd value").Required().String()
+
+	destroy = app.Command("destroy", "Remove all containers and images, wipe etcd")
 )
 
 func contains(s []string, target string) bool {
@@ -159,6 +161,8 @@ func wrappedMain() int {
 			fmt.Print(err)
 			return 1
 		}
+	case "destroy":
+		err = pickett.CmdDestroy(config)
 	default:
 		app.Usage(os.Stderr)
 		return 1

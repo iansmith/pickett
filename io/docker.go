@@ -25,6 +25,10 @@ type contInspect struct {
 	wrapped *docker.Container
 }
 
+type apiContainers []docker.APIContainers
+
+type apiImages []docker.APIImages
+
 type Port string
 type PortBinding struct {
 	HostIp   string
@@ -71,6 +75,8 @@ type DockerCli interface {
 	CmdRmImage(string) error
 	InspectImage(string) (InspectedImage, error)
 	InspectContainer(string) (InspectedContainer, error)
+	ListContainers() (apiContainers, error)
+	ListImages() (apiImages, error)
 }
 
 type InspectedImage interface {
@@ -613,6 +619,15 @@ func (c *dockerCli) InspectContainer(n string) (InspectedContainer, error) {
 	return &contInspect{
 		wrapped: i,
 	}, nil
+}
+
+func (d *dockerCli) ListContainers() (apiContainers, error) {
+	containers, err := d.client.ListContainers(docker.ListContainersOptions{All: true})
+	return containers, err
+}
+
+func (d *dockerCli) ListImages() (apiImages, error) {
+	return d.client.ListImages(true)
 }
 
 //Wrappers for getting inspections
