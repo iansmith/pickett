@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"runtime"
+	"syscall"
 
 	"github.com/igneous-systems/logit"
 	"gopkg.in/alecthomas/kingpin.v1"
@@ -87,12 +90,27 @@ func main() {
 	os.Exit(wrappedMain())
 }
 
+func InitStackDumpOnSig1() {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT)
+	go func() {
+		<-sigc
+		buf := make([]byte, 100000)
+		n := runtime.Stack(buf, true)
+		os.Stderr.Write(buf[0:n])
+		os.Exit(1)
+	}()
+}
+
 // Wrapped to make os.Exit work well with logit
 func wrappedMain() int {
 
 	kingpin.Version(PickettVersion)
 
 	action := kingpin.MustParse(app.Parse(os.Args[1:]))
+
+	// dump all goroutine stacks on ctrl-c
+	InitStackDumpOnSig1()
 
 	var logFilterLvl logit.Level
 	if *debug {
