@@ -121,23 +121,25 @@ func wrappedMain() int {
 	logit.Global.ModifyFilterLvl("stdout", logFilterLvl, nil, nil)
 	defer logit.Flush(-1)
 
-	wd, err := os.Getwd()
-	if err != nil {
-		panic("can't get working directory!")
-	}
-
 	if os.Getenv("DOCKER_HOST") == "" {
 		fmt.Fprintf(os.Stderr, "DOCKER_HOST not set; suggest DOCKER_HOST=tcp://:2375 (for local launcher)\n")
 		return 1
 	}
 
-	_, err = os.Open(filepath.Join(wd, *configFile))
+	_, err := os.Open(*configFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "./%s not found (cwd: %s)\n", *configFile, wd)
+		wd, _ := os.Getwd()
+		fmt.Fprintf(os.Stderr, "%s not found (cwd: %s)\n", *configFile, wd)
 		return 1
 	}
 
-	helper, docker, etcd, err := makeIOObjects(filepath.Join(wd, *configFile))
+	absconf, err := filepath.Abs(*configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+
+	helper, docker, etcd, err := makeIOObjects(absconf)
 	if err != nil {
 		flog.Errorf("%v", err)
 		return 1
