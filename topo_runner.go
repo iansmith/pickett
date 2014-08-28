@@ -26,6 +26,7 @@ type topoRunner struct {
 	containerName string
 	devs          map[string]string
 	priv          bool
+	wait          bool
 }
 
 func (n *topoRunner) name() string {
@@ -46,6 +47,14 @@ func (n *topoRunner) privileged() bool {
 
 func (n *topoRunner) entryPoint() []string {
 	return n.entry
+}
+
+func (n *topoRunner) waitFor() bool {
+	return n.wait
+}
+
+func (n *topoRunner) contName() string {
+	return n.containerName
 }
 
 //in returns a single node that is our inbound edge, the container we run in.

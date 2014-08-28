@@ -39,6 +39,8 @@ type runner interface {
 	devices() map[string]string
 	entryPoint() []string
 	privileged() bool
+	waitFor() bool
+	contName() string
 
 	//note that this method is not really asking a question of the runner, it's asking a
 	//question about the *image* that the runner executes in

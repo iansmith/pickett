@@ -321,6 +321,7 @@ func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 		expose: exp,
 		devs:   n.Devices,
 		priv:   n.Privileged,
+		wait:   n.WaitFor,
 	}
 	pol := defaultPolicy()
 	switch strings.ToUpper(n.Policy) {
