@@ -1,0 +1,12 @@
+language: go
+go:
+  - 1.3
+notification:
+  email:
+    recipients: builds@igneous.io
+  webhooks:
+    urls:
+      - https://iggy-build-dashboard.appspot.com/webhook/travis
+    on_start: true
+script:
+  - go test
