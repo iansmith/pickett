@@ -11,7 +11,7 @@ fi
 COMMIT=$(git rev-parse HEAD)
 
 # Force the building of linux_amd64 and darwin_amd64 binaries
-for os in linux ; do
+for os in linux darwin ; do
 	export GOOS=$os
 	export GOARCH=amd64
 
