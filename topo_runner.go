@@ -1,8 +1,6 @@
 package pickett
 
 import (
-	"time"
-
 	"github.com/igneous-systems/pickett/io"
 )
 
@@ -101,60 +99,4 @@ func (n *topoRunner) imageBuild(conf *Config) error {
 		return nil
 	}
 	return n.runIn.node.build(conf)
-}
-
-type outcomeProxyBuilder struct {
-	net        *topoRunner
-	inputName  string
-	repository string
-	tagname    string
-}
-
-func (o *outcomeProxyBuilder) ood(conf *Config) (time.Time, bool, error) {
-	ood, err := o.net.imageIsOutOfDate(conf)
-	if ood || err != nil {
-		return time.Time{}, ood, err
-	}
-
-	info, err := conf.cli.InspectImage(o.tag())
-	if err != nil {
-		//ignoring this because we are assuming it means does not exist
-		return time.Time{}, true, nil
-	}
-	return info.CreatedTime(), false, nil
-}
-
-func (o *outcomeProxyBuilder) build(conf *Config) (time.Time, error) {
-	err := o.net.imageBuild(conf)
-	if err != nil {
-		return time.Time{}, err
-	}
-	flog.Debugf("using run node %s to build", o.net.name())
-
-	//this is starting to look dodgier and dodgier
-	in, err := o.net.run(true, conf, "pickett-build", 0)
-	if err != nil {
-		return time.Time{}, err
-	}
-	_, err = conf.cli.CmdCommit(in.containerName, &io.TagInfo{o.repository, o.tagname})
-	if err != nil {
-		return time.Time{}, err
-	}
-	insp, err := conf.cli.InspectImage(o.tag())
-	if err != nil {
-		return time.Time{}, err
-	}
-	return insp.CreatedTime(), nil
-}
-
-func (o *outcomeProxyBuilder) in() []node {
-	result := []node{}
-	if o.net.runIn.isNode {
-		return append(result, o.net.runIn.node)
-	}
-	return result
-}
-
-func (o *outcomeProxyBuilder) tag() string {
-	return o.repository + ":" + o.tagname
 }

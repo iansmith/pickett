@@ -53,16 +53,15 @@ type Extraction struct {
 }
 
 type TopologyEntry struct {
-	Name         string
-	RunIn        string
-	EntryPoint   []string
-	Consumes     []string
-	Policy       string
-	Expose       map[string]int
-	CommitOnExit map[string]string
-	Instances    int
-	Devices      map[string]string
-	Privileged   bool
+	Name       string
+	RunIn      string
+	EntryPoint []string
+	Consumes   []string
+	Policy     string
+	Expose     map[string]int
+	Instances  int
+	Devices    map[string]string
+	Privileged bool
 }
 
 type BuildOpts struct {
