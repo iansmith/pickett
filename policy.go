@@ -56,11 +56,16 @@ func formKey(key string, r runner, topoName string, instance int) string {
 //start runs the runner in its policyInput and records the docker container name into etcd.
 //note that this is the lowest level code that knows about the options to docker and etcd.
 //this code is the actual implementation of start.
-func (p *policyInput) start(teeOutput bool, image string, topoName string, instance int, links map[string]string, cli io.DockerCli, etcd io.EtcdClient) error {
+func (p *policyInput) start(teeOutput bool, image string, topoName string, instance int, links map[string]string, rv *runVolumeSpec, cli io.DockerCli, etcd io.EtcdClient) error {
 
+	vols := make(map[string]string)
+	if rv != nil {
+		vols[rv.source] = rv.mountAt
+	}
 	runConfig := &io.RunConfig{
 		Image:      image,
 		Attach:     teeOutput,
+		Volumes:    vols,
 		WaitOutput: false,
 		Links:      links,
 		Ports:      p.r.exposed(),
@@ -150,7 +155,7 @@ func (p policy) String() string {
 
 //applyPolicy takes a given policy and starts or stops containers as appropriate. teeOutput is
 //really a proxy for "the user requested this be started".
-func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, instance int, links map[string]string, conf *Config) error {
+func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, instance int, links map[string]string, rv *runVolumeSpec, conf *Config) error {
 
 	//STEP 0: is image OOD?
 	ood, err := in.r.imageIsOutOfDate(conf)
@@ -171,7 +176,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 			}
 		}
 		flog.Debugf("policy %s, initial start of %s", p, in.r.name())
-		return in.start(teeOutput, in.r.imageName(), topoName, instance, links, conf.cli, conf.etcd)
+		return in.start(teeOutput, in.r.imageName(), topoName, instance, links, rv, conf.cli, conf.etcd)
 	}
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
@@ -215,7 +220,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 			startIt = true
 		}
 		if startIt {
-			if err := in.start(teeOutput, img, topoName, instance, links, conf.cli, conf.etcd); err != nil {
+			if err := in.start(teeOutput, img, topoName, instance, links, rv, conf.cli, conf.etcd); err != nil {
 				return err
 			}
 		} else {

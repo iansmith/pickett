@@ -27,6 +27,7 @@ var (
 	// Actions
 	run     = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
 	runTopo = run.Arg("topo", "Topo node.").Required().String()
+	runVol  = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
 
 	status        = app.Command("status", "Shows the status of all the known buildable tags and/or runnable nodes.")
 	statusTargets = status.Arg("targets", "Tags / Nodes").Strings()
@@ -153,7 +154,7 @@ func wrappedMain() int {
 
 	switch action {
 	case "run":
-		err = pickett.CmdRun(*runTopo, config)
+		err = pickett.CmdRun(*runTopo, *runVol, config)
 	case "build":
 		err = pickett.CmdBuild(*buildTags, config)
 	case "status":

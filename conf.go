@@ -212,7 +212,7 @@ func (c *Config) Build(name string) error {
 }
 
 // Execute is called by the "main()" of the pickett program to run a "target".
-func (c *Config) Execute(name string) error {
+func (c *Config) Execute(name string, vol *runVolumeSpec) error {
 	pair := strings.Split(strings.Trim(name, " \n"), ".")
 	if len(pair) != 2 {
 		return fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
@@ -236,7 +236,7 @@ func (c *Config) Execute(name string) error {
 
 	for i := 0; i < info.instances; i++ {
 		// XXXJDH: make the assumption that instanced nodes never want tee'd output (i.e. attaching)
-		_, err := info.runner.run(false, c, pair[0], i)
+		_, err := info.runner.run(false, c, pair[0], i, vol)
 		if err != nil {
 			return err
 		}
