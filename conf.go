@@ -53,17 +53,16 @@ type Extraction struct {
 }
 
 type TopologyEntry struct {
-	Name         string
-	RunIn        string
-	EntryPoint   []string
-	Consumes     []string
-	Policy       string
-	Expose       map[string]int
-	CommitOnExit map[string]string
-	Instances    int
-	Devices      map[string]string
-	Privileged   bool
-	WaitFor      bool
+	Name       string
+	RunIn      string
+	EntryPoint []string
+	Consumes   []string
+	Policy     string
+	Expose     map[string]int
+	Instances  int
+	Devices    map[string]string
+	Privileged bool
+	WaitFor    bool
 }
 
 type BuildOpts struct {
@@ -214,7 +213,7 @@ func (c *Config) Build(name string) error {
 }
 
 // Execute is called by the "main()" of the pickett program to run a "target".
-func (c *Config) Execute(name string) (int, error) {
+func (c *Config) Execute(name string, vol *runVolumeSpec) (int, error) {
 	pair := strings.Split(strings.Trim(name, " \n"), ".")
 	if len(pair) != 2 {
 		return 1, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
@@ -239,7 +238,7 @@ func (c *Config) Execute(name string) (int, error) {
 	for i := 0; i < info.instances; i++ {
 		// wait on the last instance only, in case many are specificed.
 		wait := info.runner.waitFor() && i == info.instances-1
-		p, err := info.runner.run(wait, c, pair[0], i)
+		p, err := info.runner.run(wait, c, pair[0], i, vol)
 		if err != nil {
 			return 1, err
 		}

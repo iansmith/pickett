@@ -200,7 +200,6 @@ func contains(list []string, candidate string) bool {
 //Thes does the portion that does not have dependencies and returns the necessary
 //bookkeeping for that to be done in a later pass.
 func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map[*topoRunner]string, error) {
-	commiters := make(map[string]*outcomeProxyBuilder)
 	implementations := make(map[*topoRunner]string)
 
 	//first pass is to establish all the names and do things that don't involve
@@ -222,32 +221,8 @@ func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map
 			runner:    w,
 			instances: n.Instances,
 		}
-
-		//this is the way we build nodes that are really "part of" this
-		//network runner but after it completes
-		for input, result := range n.CommitOnExit {
-			i := strings.Trim(input, " \n")
-			resultTrimmed := strings.Trim(result, " \n")
-			if !contains(n.Consumes, i) {
-				return nil, fmt.Errorf("can't commit input %s in '%s' because it's not consumed",
-					i, w.name())
-			}
-			parts := strings.Split(resultTrimmed, ":")
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("can't understand commit result name '%s' expected something like foo:bar", result)
-			}
-			p := &outcomeProxyBuilder{
-				net:        w,
-				inputName:  i,
-				repository: parts[0],
-				tagname:    parts[1],
-			}
-			//leave a breadcrump
-			commiters[i] = p
-			//put in list of nodes
-			c.nameToNode[resultTrimmed] = newNodeImpl(p)
-		}
 	}
+
 	//second pass is to handle the possibility that network nodes reference
 	//each other in the consumes section of the declaration
 	for _, net := range entries {
@@ -293,10 +268,6 @@ func (c *Config) dependenciesTopologyNodes(n string, implementations map[*topoRu
 //the config file is bogus; this ignores the issue of dependencies.
 func (c *Config) newTopoRunner(n *TopologyEntry) (*topoRunner, error) {
 	exp := make(map[pickett_io.Port][]pickett_io.PortBinding)
-
-	if n.Instances > 1 && n.CommitOnExit != nil {
-		return nil, fmt.Errorf("can't commit on exit with multiple instances (in %s)", n.Name)
-	}
 
 	//convert zero or any negative value to 1
 	if n.Instances < 1 {
