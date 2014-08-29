@@ -99,6 +99,7 @@ func TestMultipleInstances(T *testing.T) {
 	cli.EXPECT().InspectContainer(HENDRIX).Return(hendrixCont, nil).Times(2)
 	hendrixCont.EXPECT().Running().Return(true).Times(2)
 	hendrixCont.EXPECT().CreatedTime().Return(oneMinAgo).Times(2)
+	hendrixCont.EXPECT().ContainerName().Return("FART FART FART").Times(2)
 
 	//we need to handle the queries about part3
 	IP0 := "0.1.2.3"
