@@ -17,16 +17,15 @@ go get github.com/tools/godep
 mkdir -p $GOPATH/src/github.com/igneous-systems
 cd $GOPATH/src/github.com/igneous-systems
 git clone https://github.com/igneous-systems/pickett # can be replaced by your repo
-cd pickett
 
 # optional: you can create and checkout a branch here
 
-# git checkout master
-cd pickett
+# ensure dependencies are present
+cd $GOPATH/src/github.com/igneous-systems/pickett
 godep restore
 
 # build pickett and install it in $GOPATH/bin
-go install github.com/igneous-systems/pickett/pickett
+go install github.com/igneous-systems/pickett
 ```
 
 You should end up with the executable `pickett` in `$GOPATH/bin`.
@@ -98,6 +97,3 @@ time pickett run candidate
 ```
 
 That shows you the elapsed time to *just* do the dependency checking (the pickett overhead).
-
-
-

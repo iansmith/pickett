@@ -11,7 +11,7 @@ import (
 	"github.com/igneous-systems/logit"
 	"gopkg.in/alecthomas/kingpin.v1"
 
-	"github.com/igneous-systems/pickett"
+	"github.com/igneous-systems/pickett/core"
 	"github.com/igneous-systems/pickett/io"
 )
 

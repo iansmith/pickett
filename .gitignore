@@ -7,9 +7,6 @@
 # vagrant
 .vagrant/*
 
-# go
-Godeps
-
 #coverage
 coverage.out
 
