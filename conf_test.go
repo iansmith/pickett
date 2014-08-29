@@ -49,12 +49,6 @@ var example1 = `
 `
 
 func setupForExample1Conf(controller *gomock.Controller, helper *io.MockHelper) {
-	//ignore debug messages
-	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	helper.EXPECT().Debug(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	//for reading the conf
-	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
 	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)
 }
 
@@ -64,7 +58,6 @@ func TestConf(t *testing.T) {
 
 	helper := io.NewMockHelper(controller)
 	cli := io.NewMockDockerCli(controller)
-	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
 
 	//the caller is just opening this for the error return, he ignores the file
 	helper.EXPECT().OpenDockerfileRelative("mydir").Return(nil, nil)

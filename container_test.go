@@ -26,12 +26,7 @@ func TestAfterBuildTimeIsUpdated(t *testing.T) {
 	helper := io.NewMockHelper(controller)
 	etcd := io.NewMockEtcdClient(controller)
 
-	//ignore debug messages
-	helper.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	helper.EXPECT().Debug(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
 	//for reading the conf
-	helper.EXPECT().CheckFatal(gomock.Nil(), gomock.Any()).AnyTimes()
 	helper.EXPECT().OpenDockerfileRelative(MYDIR).Return(nil, nil)
 
 	//fake out the directory "true" path

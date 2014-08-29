@@ -12,10 +12,23 @@ import (
 	"github.com/igneous-systems/pickett/io"
 )
 
+type runVolumeSpec struct {
+	source  string
+	mountAt string
+}
+
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(target string, config *Config) (int, error) {
-	return config.Execute(target)
+func CmdRun(target string, runVol string, config *Config) (int, error) {
+	var vol *runVolumeSpec
+	if runVol != "" {
+		pair := strings.Split(runVol, ":")
+		if len(pair) != 2 {
+			return 1, fmt.Errorf("unable to understand run volume (%s), should be /foo:/bar/foo", runVol)
+		}
+		vol = &runVolumeSpec{pair[0], pair[1]}
+	}
+	return config.Execute(target, vol)
 }
 
 //return value is a bit tricky here for the primary return.  If it's nil
