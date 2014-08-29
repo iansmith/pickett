@@ -151,9 +151,10 @@ func wrappedMain() int {
 		return 1
 	}
 
+	returnCode := 0
 	switch action {
 	case "run":
-		err = pickett.CmdRun(*runTopo, config)
+		returnCode, err = pickett.CmdRun(*runTopo, config)
 	case "build":
 		err = pickett.CmdBuild(*buildTags, config)
 	case "status":
@@ -192,5 +193,5 @@ func wrappedMain() int {
 		flog.Errorf("%s: %v", action, err)
 		return 1
 	}
-	return 0
+	return returnCode
 }

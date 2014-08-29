@@ -61,7 +61,7 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 	runConfig := &io.RunConfig{
 		Image:      image,
 		Attach:     teeOutput,
-		WaitOutput: false,
+		WaitOutput: teeOutput,
 		Links:      links,
 		Ports:      p.r.exposed(),
 		Devices:    p.r.devices(),
@@ -73,22 +73,20 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 	if err != nil {
 		return err
 	}
-	if !teeOutput {
-		insp, err := cli.InspectContainer(contId)
-		if err != nil {
-			return err
-		}
-		if _, err = etcd.Put(formKey(CONTAINERS, p.r, topoName, instance), insp.ContainerName()); err != nil {
-			return err
-		}
-		if _, err = etcd.Put(formKey(IPS, p.r, topoName, instance), insp.Ip()); err != nil {
-			return err
-		}
-		if _, err = etcd.Put(formKey(PORTS, p.r, topoName, instance), strings.Join(insp.Ports(), " ")); err != nil {
-			return err
-		}
-		p.containerName = insp.ContainerName()
+	insp, err := cli.InspectContainer(contId)
+	if err != nil {
+		return err
 	}
+	if _, err = etcd.Put(formKey(CONTAINERS, p.r, topoName, instance), insp.ContainerName()); err != nil {
+		return err
+	}
+	if _, err = etcd.Put(formKey(IPS, p.r, topoName, instance), insp.Ip()); err != nil {
+		return err
+	}
+	if _, err = etcd.Put(formKey(PORTS, p.r, topoName, instance), strings.Join(insp.Ports(), " ")); err != nil {
+		return err
+	}
+	p.containerName = insp.ContainerName()
 	return nil
 }
 
@@ -230,7 +228,8 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 //createPolicyInput does the work of interrogating etcd and if necessary docker to figure
 //out the state of services.  It returns a policyInput suitable for applying policy to.
 func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*policyInput, error) {
-	value, present, err := conf.etcd.Get(formKey(CONTAINERS, r, topoName, instance))
+	key := formKey(CONTAINERS, r, topoName, instance)
+	value, present, err := conf.etcd.Get(key)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +238,6 @@ func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*
 		containerName: value,
 		r:             r,
 	}
-	// XXX this logic with the else clauses seems error prone
 	if present {
 		insp, err := conf.cli.InspectContainer(value)
 		if err != nil {
@@ -254,6 +252,7 @@ func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*
 			//we were able to
 			result.isRunning = insp.Running()
 			result.containerStarted = insp.CreatedTime()
+			result.containerName = insp.ContainerName()
 		}
 	}
 	return result, nil

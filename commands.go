@@ -14,7 +14,7 @@ import (
 
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(target string, config *Config) error {
+func CmdRun(target string, config *Config) (int, error) {
 	return config.Execute(target)
 }
 
