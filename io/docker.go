@@ -225,9 +225,11 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 
 		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
 			Container:    cont.ID,
+			InputStream:  os.Stdin,
 			OutputStream: os.Stdout,
 			ErrorStream:  os.Stderr,
 			Logs:         true,
+			Stdin:        true,
 			Stdout:       true,
 			Stderr:       true,
 			Stream:       true,
