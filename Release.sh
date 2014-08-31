@@ -18,7 +18,7 @@ for os in linux darwin ; do
 	OUTPUT=pickett-$GOOS-$GOARCH-$COMMIT
 	RELURL=http://igneous-dev.s3.amazonaws.com/pickett-releases/$OUTPUT.bin
 
-	go build -o $OUTPUT ./pickett
+	go build -o $OUTPUT .
 
 	if [[ "$1" = "-u" ]]; then
 		./s3curl.pl \
