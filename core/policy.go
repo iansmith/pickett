@@ -49,32 +49,39 @@ func defaultPolicy() policy {
 	}
 }
 
-func formKey(key string, r runner, topoName string, instance int) string {
-	return filepath.Join(io.PICKETT_KEYSPACE, key, topoName, r.name(), fmt.Sprint(instance))
+func formKey(key string, topoName string, topoEntry string, instance int) string {
+	return filepath.Join(io.PICKETT_KEYSPACE, key, topoName, topoEntry, fmt.Sprint(instance))
 }
 
 //start runs the runner in its policyInput and records the docker container name into etcd.
 //note that this is the lowest level code that knows about the options to docker and etcd.
 //this code is the actual implementation of start.
-func (p *policyInput) start(teeOutput bool, image string, topoName string, instance int, links map[string]string, rv *runVolumeSpec, cli io.DockerCli, etcd io.EtcdClient) error {
+//XXX too many arguments?
+func (p *policyInput) start(teeOutput bool, image string,
+	topoName string, topoEntry string,
+	instance int, links map[string]string, rv *runVolumeSpec,
+	cli io.DockerCli, etcd io.EtcdClient) error {
 
 	vols := make(map[string]string)
 	if rv != nil {
 		vols[rv.source] = rv.mountAt
 	}
+	forHumans := fmt.Sprintf("%s.%s.%d", topoName, topoEntry, instance)
+
 	runConfig := &io.RunConfig{
-		Image:      image,
-		Attach:     teeOutput,
-		WaitOutput: teeOutput,
-		Volumes:    vols,
-		Links:      links,
-		Ports:      p.r.exposed(),
-		Devices:    p.r.devices(),
-		Privileged: p.r.privileged(),
+		Image:         image,
+		Attach:        teeOutput,
+		WaitOutput:    teeOutput,
+		Volumes:       vols,
+		Links:         links,
+		Ports:         p.r.exposed(),
+		Devices:       p.r.devices(),
+		Privileged:    p.r.privileged(),
+		ContainerName: forHumans,
 	}
 
-	args := append(p.r.entryPoint(), topoName, fmt.Sprint(instance))
-	_, contId, err := cli.CmdRun(runConfig, args...)
+	args := append(p.r.entryPoint(), topoName, topoEntry, fmt.Sprint(instance))
+	_, contId, err := cli.CmdRun(runConfig, true, args...)
 	if err != nil {
 		return err
 	}
@@ -82,13 +89,13 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 	if err != nil {
 		return err
 	}
-	if _, err = etcd.Put(formKey(CONTAINERS, p.r, topoName, instance), insp.ContainerName()); err != nil {
+	if _, err = etcd.Put(formKey(CONTAINERS, topoName, topoEntry, instance), insp.ContainerName()); err != nil {
 		return err
 	}
-	if _, err = etcd.Put(formKey(IPS, p.r, topoName, instance), insp.Ip()); err != nil {
+	if _, err = etcd.Put(formKey(IPS, topoName, topoEntry, instance), insp.Ip()); err != nil {
 		return err
 	}
-	if _, err = etcd.Put(formKey(PORTS, p.r, topoName, instance), strings.Join(insp.Ports(), " ")); err != nil {
+	if _, err = etcd.Put(formKey(PORTS, topoName, topoEntry, instance), strings.Join(insp.Ports(), " ")); err != nil {
 		return err
 	}
 	p.containerName = insp.ContainerName()
@@ -97,11 +104,11 @@ func (p *policyInput) start(teeOutput bool, image string, topoName string, insta
 
 // stop stops the runner in its policyInput removes the container from etcd.  This is the actual
 // implementation of stop.
-func (p *policyInput) stop(topoName string, instance int, cli io.DockerCli, etcd io.EtcdClient) error {
+func (p *policyInput) stop(topoName string, topoEntry string, instance int, cli io.DockerCli, etcd io.EtcdClient) error {
 	if err := cli.CmdStop(p.containerName); err != nil {
 		return err
 	}
-	if _, err := etcd.Del(formKey(CONTAINERS, p.r, topoName, instance)); err != nil {
+	if _, err := etcd.Del(formKey(CONTAINERS, topoName, topoEntry, instance)); err != nil {
 		return err
 	}
 	return nil
@@ -153,7 +160,7 @@ func (p policy) String() string {
 
 //applyPolicy takes a given policy and starts or stops containers as appropriate. teeOutput is
 //really a proxy for "the user requested this be started".
-func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, instance int, links map[string]string, rv *runVolumeSpec, conf *Config) error {
+func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, topoEntry string, instance int, links map[string]string, rv *runVolumeSpec, conf *Config) error {
 
 	//STEP 0: is image OOD?
 	ood, err := in.r.imageIsOutOfDate(conf)
@@ -174,19 +181,19 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 			}
 		}
 		flog.Debugf("policy %s, initial start of %s", p, in.r.name())
-		return in.start(teeOutput, in.r.imageName(), topoName, instance, links, rv, conf.cli, conf.etcd)
+		return in.start(teeOutput, in.r.imageName(), topoName, topoEntry, instance, links, rv, conf.cli, conf.etcd)
 	}
 	//STEP2: stop?
 	if in.isRunning && ood && p.stop == FRESH {
 		flog.Debugf("policy %s, stopping %s (because its out of date)", p, in.r.name())
-		err = in.stop(topoName, instance, conf.cli, conf.etcd)
+		err = in.stop(topoName, topoEntry, instance, conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
 		in.isRunning = false
 	} else if in.isRunning && p.stop == ALWAYS {
 		flog.Debugf("policy %s, stopping %s because policy is ALWAYS stop", p, in.r.name())
-		err = in.stop(topoName, instance, conf.cli, conf.etcd)
+		err = in.stop(topoName, topoEntry, instance, conf.cli, conf.etcd)
 		if err != nil {
 			return err
 		}
@@ -218,7 +225,7 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 			startIt = true
 		}
 		if startIt {
-			if err := in.start(teeOutput, img, topoName, instance, links, rv, conf.cli, conf.etcd); err != nil {
+			if err := in.start(teeOutput, img, topoName, topoEntry, instance, links, rv, conf.cli, conf.etcd); err != nil {
 				return err
 			}
 		} else {
@@ -232,8 +239,8 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 
 //createPolicyInput does the work of interrogating etcd and if necessary docker to figure
 //out the state of services.  It returns a policyInput suitable for applying policy to.
-func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*policyInput, error) {
-	key := formKey(CONTAINERS, r, topoName, instance)
+func createPolicyInput(r runner, topoName string, topoEntry string, instance int, conf *Config) (*policyInput, error) {
+	key := formKey(CONTAINERS, topoName, topoEntry, instance)
 	value, present, err := conf.etcd.Get(key)
 	if err != nil {
 		return nil, err
@@ -248,7 +255,7 @@ func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*
 		if err != nil {
 			flog.Debugf("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
-			_, err = conf.etcd.Del(formKey(CONTAINERS, r, topoName, instance))
+			_, err = conf.etcd.Del(formKey(CONTAINERS, topoName, topoEntry, instance))
 			if err != nil {
 				return nil, err
 			}

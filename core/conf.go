@@ -211,16 +211,14 @@ func (c *Config) Build(name string) error {
 	}
 	return node.build(c)
 }
-
-// Execute is called by the "main()" of the pickett program to run a "target".
-func (c *Config) Execute(name string, vol *runVolumeSpec) (int, error) {
+func (c *Config) ParseTopoNamesToContainerName(topoName string, name string) (string, *topoInfo, error) {
 	pair := strings.Split(strings.Trim(name, " \n"), ".")
 	if len(pair) != 2 {
-		return 1, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
+		return "", nil, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
 	}
 	tmap, isPresent := c.nameToTopology[pair[0]]
 	if !isPresent {
-		return 1, fmt.Errorf("no such target for run: '%s'", pair[0])
+		return "", nil, fmt.Errorf("no such topology '%s'", pair[0])
 	}
 	var info *topoInfo
 	for key, value := range tmap {
@@ -229,16 +227,25 @@ func (c *Config) Execute(name string, vol *runVolumeSpec) (int, error) {
 			break
 		}
 	}
-
 	if info == nil {
-		return 1, fmt.Errorf("unable to understand '%s', expected something like foo.bar (%s is ok)", pair[1], pair[0])
+		return "", nil, fmt.Errorf("unable to understand '%s', expected something like foo.bar (%s is ok)", pair[1], pair[0])
 	}
+	return fmt.Sprintf("%s.%s.", topoName, pair[1]), info, nil
+}
 
+// Execute is called by the "main()" of the pickett program to run a "target".
+func (c *Config) Execute(topologyName string, name string, vol *runVolumeSpec) (int, error) {
+	_, info, err := c.ParseTopoNamesToContainerName(topologyName, name)
+	if err != nil {
+		return 1, err
+	}
+	defer c.cli.Cleanup()
+	pair := strings.Split(name, ".") //checked in the ParseTopoNames, so no err worry
 	exitStatus := 0
 	for i := 0; i < info.instances; i++ {
 		// wait on the last instance only, in case many are specificed.
 		wait := info.runner.waitFor() && i == info.instances-1
-		p, err := info.runner.run(wait, c, pair[0], i, vol)
+		p, err := info.runner.run(wait, c, topologyName, pair[1], i, vol)
 		if err != nil {
 			return 1, err
 		}

@@ -36,14 +36,15 @@ type PortBinding struct {
 }
 
 type RunConfig struct {
-	Image      string
-	Attach     bool
-	Volumes    map[string]string
-	Ports      map[Port][]PortBinding
-	Devices    map[string]string
-	Links      map[string]string
-	Privileged bool
-	WaitOutput bool
+	Image         string
+	Attach        bool
+	Volumes       map[string]string
+	Ports         map[Port][]PortBinding
+	Devices       map[string]string
+	Links         map[string]string
+	Privileged    bool
+	WaitOutput    bool
+	ContainerName string
 }
 
 type TagInfo struct {
@@ -61,7 +62,8 @@ type CopyArtifact struct {
 }
 
 type DockerCli interface {
-	CmdRun(*RunConfig, ...string) (*bytes.Buffer, string, error)
+	Cleanup()
+	CmdRun(*RunConfig, bool, ...string) (*bytes.Buffer, string, error)
 	CmdTag(string, bool, *TagInfo) error
 	CmdCommit(string, *TagInfo) (string, error)
 	CmdBuild(*BuildConfig, string, string) error
@@ -105,7 +107,8 @@ func NewDockerCli() (DockerCli, error) {
 }
 
 type dockerCli struct {
-	client *docker.Client
+	client              *docker.Client
+	containersToCleanup []string
 }
 
 // newDockerCli builds a new docker interface and returns it. It
@@ -122,52 +125,37 @@ func newDockerCli() (DockerCli, error) {
 	return result, nil
 }
 
-func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Container, error) {
-	tries := 0
-	ok := false
+func (d *dockerCli) createNamedContainer(config *docker.Config, name string) (*docker.Container, error) {
 	var cont *docker.Container
 	var err error
 	var opts docker.CreateContainerOptions
-	for tries < 3 {
-		opts.Config = config
-		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Attempting to create container %s (%d) from image: %s", opts.Name, tries, opts.Config.Image)
-
-		cont, err = d.client.CreateContainer(opts)
-		if err != nil {
-			detail, ok := err.(*docker.Error)
-			if ok && detail.Status == 409 {
-				tries++
-				continue
-			} else {
-				return nil, err
-			}
-		}
-		ok = true
-		break
+	if name == "" {
+		flog.Debugf("no container provided to create, assuming not for human consumption...")
 	}
-	if !ok {
-		opts.Name = "" //fallback
-		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Creating container named: %s", opts.Name)
-
-		cont, err = d.client.CreateContainer(opts)
-		if err != nil {
+	opts.Name = name
+	opts.Config = config
+	cont, err = d.client.CreateContainer(opts)
+	if err != nil {
+		detail, ok := err.(*docker.Error)
+		if ok && detail.Status == 409 {
+			return nil, fmt.Errorf("container name %s already in use", name)
+		} else {
 			return nil, err
 		}
 	}
 	return cont, nil
 }
 
-var EMPTY struct{}
-
-func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, string, error) {
+func (d *dockerCli) CmdRun(runconf *RunConfig, cleanup bool, s ...string) (*bytes.Buffer, string, error) {
 	config := &docker.Config{}
 	config.Cmd = s
 	config.Image = runconf.Image
-
+	if runconf.ContainerName != "" && cleanup {
+		flog.Debugf("cleanup requested on %v", runconf.ContainerName)
+		d.containersToCleanup = append(d.containersToCleanup, runconf.ContainerName)
+	}
 	fordebug := new(bytes.Buffer)
-	cont, err := d.createNamedContainer(config)
+	cont, err := d.createNamedContainer(config, runconf.ContainerName)
 	if err != nil {
 		return nil, "", err
 	}
@@ -421,6 +409,12 @@ func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 	if err != nil {
 		return time.Time{}, err
 	}
+	defer func() {
+		err := d.CmdRmContainer(cont)
+		if err != nil {
+			flog.Errorf("Unable to delete container: %s (in defer)", cont)
+		}
+	}()
 	err = d.client.StartContainer(cont, &docker.HostConfig{})
 	if err != nil {
 		return time.Time{}, err
@@ -700,4 +694,13 @@ func (c *contInspect) ContainerID() string {
 
 func (c *contInspect) ExitStatus() int {
 	return c.wrapped.State.ExitCode
+}
+
+func (d *dockerCli) Cleanup() {
+	for _, cont := range d.containersToCleanup {
+		err := d.CmdRmContainer(cont)
+		if err != nil {
+			flog.Errorf("unable to cleanup container:%s", cont)
+		}
+	}
 }

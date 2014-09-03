@@ -79,7 +79,12 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 			}
 		} else {
 			//fire for range
-			buf, _, err := conf.cli.CmdRun(runConfig, seq...)
+			buf, contId, err := conf.cli.CmdRun(runConfig, false, seq...)
+			if err != nil {
+				return time.Time{}, true, err
+			}
+			//clean up the container
+			err = conf.cli.CmdRmContainer(contId)
 			if err != nil {
 				return time.Time{}, true, err
 			}
@@ -145,12 +150,17 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 
 	for _, seq := range sequence {
 		runConfig.Image = img
-		_, contId, err := conf.cli.CmdRun(runConfig, seq...)
+		_, contId, err := conf.cli.CmdRun(runConfig, false, seq...)
 		if err != nil {
 			return time.Time{}, err
 		}
 		//update the image
 		img, err = conf.cli.CmdCommit(contId, nil)
+		if err != nil {
+			return time.Time{}, err
+		}
+		//clean up the now dead container
+		err = conf.cli.CmdRmContainer(contId)
 		if err != nil {
 			return time.Time{}, err
 		}
