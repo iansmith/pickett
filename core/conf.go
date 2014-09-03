@@ -73,6 +73,7 @@ type BuildOpts struct {
 type topoInfo struct {
 	runner    runner
 	instances int
+	waitFor   bool
 	children  []*topoInfo
 }
 
@@ -245,7 +246,7 @@ func (c *Config) Execute(topologyName string, name string, vol *runVolumeSpec, n
 	exitStatus := 0
 	for i := 0; i < info.instances; i++ {
 		// wait on the last instance only, in case many are specificed.
-		wait := info.runner.waitFor() && i == info.instances-1
+		wait := info.runner.waitFor() && i == info.instances-1 && (!noCleanup)
 		p, err := info.runner.run(wait, c, topologyName, pair[1], i, vol)
 		if err != nil {
 			return 1, err

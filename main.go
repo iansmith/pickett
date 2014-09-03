@@ -176,8 +176,15 @@ func wrappedMain() int {
 		flog.Errorf("%v", err)
 		return 1
 	}
-	sigIntHandler.PushCallback(func() { docker.Cleanup() })
-	defer docker.Cleanup()
+	//these are double negatives because the default is false
+	sigIntHandler.PushCallback(func() {
+		if !*runNoCleanup {
+			docker.Cleanup()
+		}
+	})
+	if !*runNoCleanup {
+		defer docker.Cleanup()
+	}
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd)
 	if err != nil {
