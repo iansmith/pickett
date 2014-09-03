@@ -466,6 +466,24 @@ func (d *dockerCli) CmdLastModTime(realPathSource map[string]string, img string,
 	return best, nil
 }
 
+//
+// HACK! Poll the server until the image is built.
+//
+func hacky_poll(d *dockerCli) chan struct{} {
+	term := make(chan struct{})
+	go func() {
+		for {
+			d.client.Ping()
+			select {
+			case <-time.After(300 * time.Millisecond):
+			case <-term:
+				return
+			}
+		}
+	}()
+	return term
+}
+
 func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, imgDest string,
 	artifacts []*CopyArtifact, resultTag string) error {
 	cont, err := d.makeDummyContainerToGetAtImage(imgSrc)
@@ -568,6 +586,9 @@ func (d *dockerCli) CmdCopy(realPathSource map[string]string, imgSrc string, img
 
 	flog.Debugf("[docker cmd] Building image. Name: %s", opts.Name)
 
+	term := hacky_poll(d)
+	defer close(term)
+
 	if err := d.client.BuildImage(opts); err != nil {
 		return err
 	}
@@ -595,6 +616,9 @@ func (d *dockerCli) CmdBuild(config *BuildConfig, pathToDir string, tag string) 
 		SuppressOutput: false,
 		NoCache:        config.NoCache,
 	}
+
+	term := hacky_poll(d)
+	defer close(term)
 
 	flog.Debugf("[docker cmd] Building image. Name: %s", opts.Name)
 	if err := d.client.BuildImage(opts); err != nil {
