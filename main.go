@@ -25,10 +25,9 @@ var (
 	configFile = app.Flag("configFile", "Config file.").Short('f').Default("Pickett.json").String()
 
 	// Actions
-	run         = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
-	runTopo     = run.Arg("topo", "Topo node.").Required().String()
-	runVol      = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
-	runTopoName = run.Arg("toponame", "topology name for creating containers").Default(os.Getenv("USER")).String()
+	run     = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
+	runTopo = run.Arg("topo", "Topo node.").Required().String()
+	runVol  = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
 
 	status        = app.Command("status", "Shows the status of all the known buildable tags and/or runnable nodes.")
 	statusTargets = status.Arg("targets", "Tags / Nodes").Strings()
@@ -156,8 +155,8 @@ func wrappedMain() int {
 	returnCode := 0
 	switch action {
 	case "run":
-		returnCode, err = pickett.CmdRun(*runTopoName, *runTopo, *runVol, config)
-	case "build":
+		returnCode, err = pickett.CmdRun(*runTopo, *runVol, config)
+    case "build":
 		err = pickett.CmdBuild(*buildTags, config)
 	case "status":
 		err = pickett.CmdStatus(*statusTargets, config)
