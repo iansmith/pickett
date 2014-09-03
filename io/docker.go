@@ -268,17 +268,17 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, cleanup bool, s ...string) (*byte
 }
 
 func (d *dockerCli) CmdStop(contID string) error {
-	flog.Debugf("stopping container %s", contID)
+	flog.Debugf("Stopping container %s\n", contID)
 	return d.client.StopContainer(contID, 2)
 }
 
 func (d *dockerCli) CmdRmImage(imgID string) error {
-	flog.Debugf("removing image %s", imgID)
+	flog.Debugf("Removing image %s\n", imgID)
 	return d.client.RemoveImage(imgID)
 }
 
 func (d *dockerCli) CmdRmContainer(contID string) error {
-	flog.Debugf("removing container %s", contID)
+	flog.Debugf("removing container %s\n", contID)
 	opts := docker.RemoveContainerOptions{
 		ID: contID,
 	}
@@ -287,7 +287,7 @@ func (d *dockerCli) CmdRmContainer(contID string) error {
 
 func (d *dockerCli) CmdTag(image string, force bool, info *TagInfo) error {
 
-	flog.Debugf("[docker cmd] Tagging image %s as %s:%s", image, info.Repository, info.Tag)
+	flog.Debugf("[docker cmd] Tagging image %s as %s:%s\n", image, info.Repository, info.Tag)
 
 	return d.client.TagImage(image, docker.TagImageOptions{
 		Force: force,
@@ -697,27 +697,10 @@ func (c *contInspect) ExitStatus() int {
 }
 
 func (d *dockerCli) Cleanup() {
-	remainingContainers := make([]string, 0)
 	for _, cont := range d.containersToCleanup {
-		err := d.cleanupContainer(cont)
+		err := d.CmdRmContainer(cont)
 		if err != nil {
-			flog.Errorf("unable to cleanup container '%s': %s", cont, err)
-			remainingContainers = append(remainingContainers, cont)
+			flog.Errorf("unable to cleanup container:%s", cont)
 		}
 	}
-	d.containersToCleanup = remainingContainers
-}
-
-func (d *dockerCli) cleanupContainer(id string) error {
-	err := d.CmdStop(id)
-	if err != nil {
-		if _, ok := err.(*docker.ContainerNotRunning); !ok {
-			return err
-		}
-	}
-	err = d.CmdRmContainer(id)
-	if err != nil {
-		return err
-	}
-	return nil
 }

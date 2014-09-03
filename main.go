@@ -92,47 +92,16 @@ func main() {
 	os.Exit(wrappedMain())
 }
 
-// SigHandler listens for a given signal, and then evaluates pushed callbacks
-// opposite the order in which they were pushed
-// That is, it is a stack of calls to make when the signal arrives
-type SigHandler interface {
-	PushCallback(func())
-	Close()
-}
-
-type sigHandler struct {
-	sigc      chan os.Signal
-	callbacks []func()
-}
-
-func NewSigHandler(sig ...os.Signal) SigHandler {
-	s := new(sigHandler)
-	s.sigc = make(chan os.Signal, 1)
-	s.callbacks = make([]func(), 0)
-	go s.listen()
-	signal.Notify(s.sigc, sig...)
-	return s
-}
-
-func (s *sigHandler) listen() {
-	for {
-		_, ok := <-s.sigc
-		if ok {
-			for i := len(s.callbacks) - 1; i >= 0; i-- {
-				s.callbacks[i]()
-			}
-		} else {
-			return
-		}
-	}
-}
-
-func (s *sigHandler) PushCallback(f func()) {
-	s.callbacks = append(s.callbacks, f)
-}
-
-func (s *sigHandler) Close() {
-	close(s.sigc)
+func InitStackDumpOnSig1() {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT)
+	go func() {
+		<-sigc
+		buf := make([]byte, 100000)
+		n := runtime.Stack(buf, true)
+		os.Stderr.Write(buf[0:n])
+		os.Exit(1)
+	}()
 }
 
 // Wrapped to make os.Exit work well with logit
@@ -142,18 +111,8 @@ func wrappedMain() int {
 
 	action := kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	sigIntHandler := NewSigHandler(syscall.SIGINT, syscall.SIGTERM)
-	defer sigIntHandler.Close()
-	sigIntHandler.PushCallback(func() { os.Exit(1) })
-
-	// if in debug mode, dump all goroutinstacks on ctrl-c
-	if *debug {
-		sigIntHandler.PushCallback(func() {
-			buf := make([]byte, 100000)
-			n := runtime.Stack(buf, true)
-			os.Stderr.Write(buf[0:n])
-		})
-	}
+	// dump all goroutine stacks on ctrl-c
+	InitStackDumpOnSig1()
 
 	var logFilterLvl logit.Level
 	if *debug {
@@ -162,7 +121,6 @@ func wrappedMain() int {
 		logFilterLvl = logit.INFO
 	}
 	logit.Global.ModifyFilterLvl("stdout", logFilterLvl, nil, nil)
-	sigIntHandler.PushCallback(func() { logit.Flush(-1) })
 	defer logit.Flush(-1)
 
 	if os.Getenv("DOCKER_HOST") == "" {
@@ -188,8 +146,6 @@ func wrappedMain() int {
 		flog.Errorf("%v", err)
 		return 1
 	}
-	sigIntHandler.PushCallback(func() { docker.Cleanup() })
-	defer docker.Cleanup()
 	reader := helper.ConfigReader()
 	config, err := pickett.NewConfig(reader, helper, docker, etcd)
 	if err != nil {

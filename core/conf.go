@@ -239,6 +239,7 @@ func (c *Config) Execute(topologyName string, name string, vol *runVolumeSpec) (
 	if err != nil {
 		return 1, err
 	}
+	defer c.cli.Cleanup()
 	pair := strings.Split(name, ".") //checked in the ParseTopoNames, so no err worry
 	exitStatus := 0
 	for i := 0; i < info.instances; i++ {

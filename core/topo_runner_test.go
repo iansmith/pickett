@@ -125,6 +125,9 @@ func TestMultipleInstances(T *testing.T) {
 	etcd.EXPECT().Put("/pickett/ports/test_user/part3/0", PORT0).Return("ignored-port0", nil)
 	etcd.EXPECT().Put("/pickett/ports/test_user/part3/1", PORT1).Return("ignored-port1", nil)
 
+	//get rid of run containers
+	cli.EXPECT().Cleanup()
+
 	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd)
 	if err != nil {
 		T.Fatalf("can't parse legal config file: %v", err)
