@@ -135,7 +135,7 @@ func TestMultipleInstances(T *testing.T) {
 	}
 
 	//do the go build wich consumes the thing built at after-part1
-	if _, err := c.Execute("test_user", "someothergraph.part3", nil); err != nil {
+	if _, err := c.Execute("test_user", "someothergraph.part3", nil, false); err != nil {
 		T.Fatalf("error in Build: %v", err)
 	}
 

@@ -220,15 +220,16 @@ func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map
 		c.nameToTopology[tname][trimmedName] = &topoInfo{
 			runner:    w,
 			instances: n.Instances,
+			waitFor:   n.WaitFor,
 		}
 	}
 
-	//second pass is to handle the possibility that network nodes reference
+	//second pass is to handle the possibility that topology nodes reference
 	//each other in the consumes section of the declaration
-	for _, net := range entries {
-		info := c.nameToTopology[tname][strings.Trim(net.Name, " \n")]
+	for _, top := range entries {
+		info := c.nameToTopology[tname][strings.Trim(top.Name, " \n")]
 		n := info.runner.(*topoRunner)
-		for _, in := range net.Consumes {
+		for _, in := range top.Consumes {
 			trimmed := strings.Trim(in, " \n")
 			other, ok := c.nameToTopology[tname][trimmed]
 			if !ok {
@@ -239,6 +240,7 @@ func (c *Config) checkTopologyNodes(tname string, entries []*TopologyEntry) (map
 					in, other.instances, n.name())
 			}
 			n.consumes = append(n.consumes, other.runner)
+			info.children = append(info.children, other)
 		}
 	}
 

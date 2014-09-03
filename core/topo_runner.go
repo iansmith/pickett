@@ -73,7 +73,8 @@ func (n *topoRunner) imageName() string {
 // that this one depends on (consumes).  Note that behavior of starting or stopping
 // particular dependent services is controllled through the policy apparatus.
 func (n *topoRunner) run(teeOutput bool, conf *Config,
-	topoName string, topoEntry string, instance int, rv *runVolumeSpec) (*policyInput, error) {
+	topoName string, topoEntry string, instance int,
+	rv *runVolumeSpec) (*policyInput, error) {
 
 	links := make(map[string]string)
 	for _, r := range n.consumes {

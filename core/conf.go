@@ -73,6 +73,7 @@ type BuildOpts struct {
 type topoInfo struct {
 	runner    runner
 	instances int
+	children  []*topoInfo
 }
 
 type Config struct {
@@ -211,14 +212,15 @@ func (c *Config) Build(name string) error {
 	}
 	return node.build(c)
 }
-func (c *Config) ParseTopoNamesToContainerName(topoName string, name string) (string, *topoInfo, error) {
+
+func (c *Config) ParseTopoNames(name string) (*topoInfo, error) {
 	pair := strings.Split(strings.Trim(name, " \n"), ".")
 	if len(pair) != 2 {
-		return "", nil, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
+		return nil, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
 	}
 	tmap, isPresent := c.nameToTopology[pair[0]]
 	if !isPresent {
-		return "", nil, fmt.Errorf("no such topology '%s'", pair[0])
+		return nil, fmt.Errorf("no such topology '%s'", pair[0])
 	}
 	var info *topoInfo
 	for key, value := range tmap {
@@ -228,14 +230,14 @@ func (c *Config) ParseTopoNamesToContainerName(topoName string, name string) (st
 		}
 	}
 	if info == nil {
-		return "", nil, fmt.Errorf("unable to understand '%s', expected something like foo.bar (%s is ok)", pair[1], pair[0])
+		return nil, fmt.Errorf("unable to understand '%s', expected something like foo.bar (%s is ok)", pair[1], pair[0])
 	}
-	return fmt.Sprintf("%s.%s.", topoName, pair[1]), info, nil
+	return info, nil
 }
 
 // Execute is called by the "main()" of the pickett program to run a "target".
-func (c *Config) Execute(topologyName string, name string, vol *runVolumeSpec) (int, error) {
-	_, info, err := c.ParseTopoNamesToContainerName(topologyName, name)
+func (c *Config) Execute(topologyName string, name string, vol *runVolumeSpec, noCleanup bool) (int, error) {
+	info, err := c.ParseTopoNames(name)
 	if err != nil {
 		return 1, err
 	}

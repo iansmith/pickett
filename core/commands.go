@@ -19,7 +19,7 @@ type runVolumeSpec struct {
 
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(topologyName string, target string, runVol string, config *Config) (int, error) {
+func CmdRun(topologyName string, target string, runVol string, noCleanup bool, config *Config) (int, error) {
 	var vol *runVolumeSpec
 	if runVol != "" {
 		pair := strings.Split(runVol, ":")
@@ -29,7 +29,7 @@ func CmdRun(topologyName string, target string, runVol string, config *Config) (
 		vol = &runVolumeSpec{pair[0], pair[1]}
 	}
 
-	return config.Execute(topologyName, target, vol)
+	return config.Execute(topologyName, target, vol, noCleanup)
 }
 
 //return value is a bit tricky here for the primary return.  If it's nil
@@ -225,35 +225,37 @@ func CmdStop(targets []string, config *Config) error {
 }
 
 // CmdDrop stops and removes the targets containers
-func CmdDrop(targets []string, config *Config) error {
-	err := CmdStop(targets, config)
+func CmdDrop(topologyAlias string, name string, config *Config) error {
+	info, err := config.ParseTopoNames(name)
 	if err != nil {
 		return err
 	}
-	dropSet := chosenRunnables(config, targets)
-	for _, drop := range dropSet {
-		pair := strings.Split(drop, ".")
-		if len(pair) != 2 {
-			panic(fmt.Sprintf("can't understand the target %s", drop))
-		}
-		instances, err := statusInstances(pair[0], pair[1], config)
+	return tryDrop(topologyAlias, info, config)
+}
+
+func tryDrop(topologyAlias string, info *topoInfo, conf *Config) error {
+	for i := 0; i < info.instances; i++ {
+		proposed := fmt.Sprintf("%s.%s.%d", topologyAlias, info.runner.name(), i)
+		flog.Infof("trying to drop %s", proposed)
+		insp, err := conf.cli.InspectContainer(proposed)
 		if err != nil {
-			return err
+			flog.Errorf("error trying to examine container %s, ignoring...", proposed)
+			continue
 		}
-		for i, contId := range instances {
-			if err := config.cli.CmdRmContainer(contId); err != nil {
-				flog.Errorf("Failed to remove %s, already destroyed ? - %s", contId, err)
-				continue // This can happen, so we should not error out.
-			}
-			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
-			oldId, err := config.etcd.Del(key)
-			if err != nil || oldId != contId {
-				if err != nil {
-					return err
-				}
-				return fmt.Errorf("Unexpected container id: expecting %s but got %s!", contId, oldId)
+		if insp.Running() {
+			err := conf.cli.CmdStop(proposed)
+			if err != nil {
+				flog.Errorf("error trying to stop %s: %v, continuing...", proposed, err)
+				continue
 			}
 		}
+		err = conf.cli.CmdRmContainer(proposed)
+		if err != nil {
+			flog.Errorf("error trying to remove container %s:%v, continuing...", proposed, err)
+		}
+	}
+	for _, child := range info.children {
+		tryDrop(topologyAlias, child, conf)
 	}
 	return nil
 }

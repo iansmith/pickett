@@ -25,28 +25,18 @@ var (
 	configFile = app.Flag("configFile", "Config file.").Short('f').Default("Pickett.json").String()
 
 	// Actions
-	run         = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
-	runTopo     = run.Arg("topo", "Topo node.").Required().String()
-	runVol      = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
-	runTopoName = run.Arg("toponame", "topology name for creating containers").Default(os.Getenv("USER")).String()
-
-	status        = app.Command("status", "Shows the status of all the known buildable tags and/or runnable nodes.")
-	statusTargets = status.Arg("targets", "Tags / Nodes").Strings()
+	run          = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
+	runTopo      = run.Arg("topo", "Topo node.").Required().String()
+	runVol       = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
+	runTopoName  = run.Arg("toponame", "topology name for creating containers").Default(os.Getenv("USER")).String()
+	runNoCleanup = run.Flag("nocleanup", "dont reclaim containers that are started as part of run").Short('n').Bool()
 
 	build     = app.Command("build", "Build all tags or specified tags.")
 	buildTags = build.Arg("tags", "Tags").Strings()
 
-	stop      = app.Command("stop", "Stop all or a specific node.")
-	stopNodes = stop.Arg("topology.nodes", "Topology Nodes").Strings()
-
-	drop      = app.Command("drop", "Stop and delete all or specific node.")
-	dropNodes = drop.Arg("topology.nodes", "Topology Nodes").Strings()
-
-	wipe     = app.Command("wipe", "Delete all or specified tag (force rebuild next time).")
-	wipeTags = wipe.Arg("tags", "Tags").Strings()
-
-	ps      = app.Command("ps", "Give 'docker ps' like output of running topologies.")
-	psNodes = ps.Arg("topology.nodes", "Topology Nodes").Strings()
+	drop         = app.Command("drop", "Stop and delete running and stopped containers derived from a run")
+	dropTopo     = drop.Arg("topo", "Topology Node").Required().String()
+	dropTopoName = drop.Arg("toponame", "topology name for dropping containers").Default(os.Getenv("USER")).String()
 
 	inject     = app.Command("inject", "Run the given command in the given topology node")
 	injectNode = inject.Arg("topology.node", "Topology Node").Required().String()
@@ -57,8 +47,6 @@ var (
 	etcdSet    = app.Command("etcdset", "Set a key/value pair in Pickett's Etcd store.")
 	etcdSetKey = etcdSet.Arg("key", "Etcd key (full path)").Required().String()
 	etcdSetVal = etcdSet.Arg("value", "Etcd value").Required().String()
-
-	destroy = app.Command("destroy", "Remove all containers and images, wipe etcd")
 )
 
 func contains(s []string, target string) bool {
@@ -200,19 +188,11 @@ func wrappedMain() int {
 	returnCode := 0
 	switch action {
 	case "run":
-		returnCode, err = pickett.CmdRun(*runTopoName, *runTopo, *runVol, config)
+		returnCode, err = pickett.CmdRun(*runTopoName, *runTopo, *runVol, *runNoCleanup, config)
 	case "build":
 		err = pickett.CmdBuild(*buildTags, config)
-	case "status":
-		err = pickett.CmdStatus(*statusTargets, config)
-	case "stop":
-		err = pickett.CmdStop(*stopNodes, config)
 	case "drop":
-		err = pickett.CmdDrop(*dropNodes, config)
-	case "wipe":
-		err = pickett.CmdWipe(*wipeTags, config)
-	case "ps":
-		err = pickett.CmdPs(*psNodes, config)
+		err = pickett.CmdDrop(*dropTopoName, *dropTopo, config)
 	case "inject":
 		err = pickett.CmdInject(*injectNode, *injectCmd, config)
 	case "etcdget":
@@ -228,8 +208,6 @@ func wrappedMain() int {
 			fmt.Print(err)
 			return 1
 		}
-	case "destroy":
-		err = pickett.CmdDestroy(config)
 	default:
 		app.Usage(os.Stderr)
 		return 1
