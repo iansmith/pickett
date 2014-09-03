@@ -78,7 +78,7 @@ func (n *topoRunner) run(teeOutput bool, conf *Config,
 	links := make(map[string]string)
 	for _, r := range n.consumes {
 		flog.Debugf("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
-		input, err := r.run(false, conf, topoName, r.name(), 0, rv)
+		input, err := r.run(false, conf, topoName, topoEntry, 0, rv)
 		if err != nil {
 			return nil, err
 		}
