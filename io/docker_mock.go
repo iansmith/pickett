@@ -5,8 +5,8 @@ package io
 
 import (
 	bytes "bytes"
-	gomock "code.google.com/p/gomock/gomock"
 	time "time"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of DockerCli interface
@@ -30,9 +30,17 @@ func (_m *MockDockerCli) EXPECT() *_MockDockerCliRecorder {
 	return _m.recorder
 }
 
-func (_m *MockDockerCli) CmdRun(_param0 *RunConfig, _param1 ...string) (*bytes.Buffer, string, error) {
-	_s := []interface{}{_param0}
-	for _, _x := range _param1 {
+func (_m *MockDockerCli) Cleanup() {
+	_m.ctrl.Call(_m, "Cleanup")
+}
+
+func (_mr *_MockDockerCliRecorder) Cleanup() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Cleanup")
+}
+
+func (_m *MockDockerCli) CmdRun(_param0 *RunConfig, _param1 bool, _param2 ...string) (*bytes.Buffer, string, error) {
+	_s := []interface{}{_param0, _param1}
+	for _, _x := range _param2 {
 		_s = append(_s, _x)
 	}
 	ret := _m.ctrl.Call(_m, "CmdRun", _s...)
@@ -42,8 +50,8 @@ func (_m *MockDockerCli) CmdRun(_param0 *RunConfig, _param1 ...string) (*bytes.B
 	return ret0, ret1, ret2
 }
 
-func (_mr *_MockDockerCliRecorder) CmdRun(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
-	_s := append([]interface{}{arg0}, arg1...)
+func (_mr *_MockDockerCliRecorder) CmdRun(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	_s := append([]interface{}{arg0, arg1}, arg2...)
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CmdRun", _s...)
 }
 
