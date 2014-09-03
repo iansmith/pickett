@@ -79,7 +79,7 @@ func (p *policyInput) start(teeOutput bool, image string,
 		Privileged:    p.r.privileged(),
 		ContainerName: forHumans,
 	}
-
+	// WARNING: If you chnage the order of the arguments, update the start/python scripts !!
 	args := append(p.r.entryPoint(), topoName, topoEntry, fmt.Sprint(instance))
 	_, contId, err := cli.CmdRun(runConfig, true, args...)
 	if err != nil {
