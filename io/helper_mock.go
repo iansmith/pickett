@@ -4,10 +4,10 @@
 package io
 
 import (
-	io "io"
-	os "os"
 	time "time"
 	gomock "code.google.com/p/gomock/gomock"
+	io "io"
+	os "os"
 )
 
 // Mock of Helper interface

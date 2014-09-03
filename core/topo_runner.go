@@ -72,23 +72,25 @@ func (n *topoRunner) imageName() string {
 // run actually does the work to launch this network ,including launching all the networks
 // that this one depends on (consumes).  Note that behavior of starting or stopping
 // particular dependent services is controllled through the policy apparatus.
-func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance int, rv *runVolumeSpec) (*policyInput, error) {
+func (n *topoRunner) run(teeOutput bool, conf *Config,
+	topoName string, topoEntry string, instance int, rv *runVolumeSpec) (*policyInput, error) {
+
 	links := make(map[string]string)
 	for _, r := range n.consumes {
 		flog.Debugf("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
-		input, err := r.run(false, conf, topoName, 0, rv)
+		input, err := r.run(false, conf, topoName, r.name(), 0, rv)
 		if err != nil {
 			return nil, err
 		}
 		links[input.containerName] = input.r.name()
 	}
 
-	in, err := createPolicyInput(n, topoName, instance, conf)
+	in, err := createPolicyInput(n, topoName, topoEntry, instance, conf)
 	if err != nil {
 		return nil, err
 	}
 	n.containerName = in.containerName //for use in destroy
-	return in, n.policy.appyPolicy(teeOutput, in, topoName, instance, links, rv, conf)
+	return in, n.policy.appyPolicy(teeOutput, in, topoName, topoEntry, instance, links, rv, conf)
 }
 
 // imageIsOutOfDate delegates to the image if it is a node, otherwise false.
