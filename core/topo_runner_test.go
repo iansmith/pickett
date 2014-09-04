@@ -70,9 +70,9 @@ func TestMultipleInstances(T *testing.T) {
 	oneMinAgo := now.Add(-1 * time.Minute)
 	oneHrAgoOneMin := oneHrAgo.Add(-1 * time.Minute)
 
-	PART3KEY0 := "/pickett" + "/" + CONTAINERS + "/" + "test_user" + "/" + "part3" + "/" + "0"
-	PART3KEY1 := "/pickett" + "/" + CONTAINERS + "/" + "test_user" + "/" + "part3" + "/" + "1"
-	PART4 := "/pickett" + "/" + CONTAINERS + "/" + "test_user" + "/" + "part4" + "/" + "0"
+	PART3KEY0 := "/pickett" + "/" + CONTAINERS + "/" + "someothergraph" + "/" + "part3" + "/" + "0"
+	PART3KEY1 := "/pickett" + "/" + CONTAINERS + "/" + "someothergraph" + "/" + "part3" + "/" + "1"
+	PART4 := "/pickett" + "/" + CONTAINERS + "/" + "someothergraph" + "/" + "part4" + "/" + "0"
 
 	//called as part of config check
 	helper.EXPECT().OpenDockerfileRelative("somedir").Return(nil, nil)
@@ -88,8 +88,8 @@ func TestMultipleInstances(T *testing.T) {
 	etcd.EXPECT().Get(PART3KEY1).Return("", false, nil)
 
 	//pass
-	cli.EXPECT().CmdRun(gomock.Any(), true, "/bin/part3-start.sh", "test_user", "part3", "0").Return(nil, "p3cont0", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), true, "/bin/part3-start.sh", "test_user", "part3", "1").Return(nil, "p3cont1", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "/bin/part3-start.sh", "someothergraph", "0").Return(nil, "p3cont0", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "/bin/part3-start.sh", "someothergraph", "1").Return(nil, "p3cont1", nil)
 
 	//testing to see if part one improved is up, we act like its still up, note it is checked
 	//twice, one for each instance of part3
@@ -118,12 +118,12 @@ func TestMultipleInstances(T *testing.T) {
 	cli.EXPECT().InspectContainer("p3cont0").Return(vanZant0, nil)
 	cli.EXPECT().InspectContainer("p3cont1").Return(vanZant1, nil)
 
-	etcd.EXPECT().Put("/pickett/containers/test_user/part3/0", "rvanzant0").Return("ignored0", nil)
-	etcd.EXPECT().Put("/pickett/containers/test_user/part3/1", "rvanzant1").Return("ignored1", nil)
-	etcd.EXPECT().Put("/pickett/ips/test_user/part3/0", IP0).Return("ignored-ip0", nil)
-	etcd.EXPECT().Put("/pickett/ips/test_user/part3/1", IP1).Return("ignored-ip1", nil)
-	etcd.EXPECT().Put("/pickett/ports/test_user/part3/0", PORT0).Return("ignored-port0", nil)
-	etcd.EXPECT().Put("/pickett/ports/test_user/part3/1", PORT1).Return("ignored-port1", nil)
+	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/0", "rvanzant0").Return("ignored0", nil)
+	etcd.EXPECT().Put("/pickett/containers/someothergraph/part3/1", "rvanzant1").Return("ignored1", nil)
+	etcd.EXPECT().Put("/pickett/ips/someothergraph/part3/0", IP0).Return("ignored-ip0", nil)
+	etcd.EXPECT().Put("/pickett/ips/someothergraph/part3/1", IP1).Return("ignored-ip1", nil)
+	etcd.EXPECT().Put("/pickett/ports/someothergraph/part3/0", PORT0).Return("ignored-port0", nil)
+	etcd.EXPECT().Put("/pickett/ports/someothergraph/part3/1", PORT1).Return("ignored-port1", nil)
 
 	c, err := NewConfig(strings.NewReader(netExample), helper, cli, etcd)
 	if err != nil {
@@ -135,7 +135,7 @@ func TestMultipleInstances(T *testing.T) {
 	}
 
 	//do the go build wich consumes the thing built at after-part1
-	if _, err := c.Execute("test_user", "someothergraph.part3", nil); err != nil {
+	if _, err := c.Execute("someothergraph.part3", nil); err != nil {
 		T.Fatalf("error in Build: %v", err)
 	}
 

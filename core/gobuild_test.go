@@ -49,15 +49,12 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	cli.EXPECT().InspectImage("fart:chattanooga").Return(nil, fakeInspectError)
 
 	// mock out the docker api calls to build/test the software
-	first := cli.EXPECT().CmdRun(gomock.Any(), false, "go", "install", "p4...").Return(nil, "some_cont1", nil)
+	first := cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "p4...").Return(nil, "some_cont", nil)
 	fakeErr := errors.New("whoa doggie")
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "install", "p5/p6").Return(nil, "some_cont2", fakeErr).After(first)
-
-	//call to remove the intermediate container used for probe
-	cli.EXPECT().CmdRmContainer("some_cont1")
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "p5/p6").Return(nil, "", fakeErr).After(first)
 
 	//one commits, one for each successful build
-	cli.EXPECT().CmdCommit("some_cont1", nil)
+	cli.EXPECT().CmdCommit("some_cont", nil)
 
 	if err := c.Build("fart:chattanooga"); err != fakeErr {
 		t.Errorf("failed to get expected error: %v", err)
@@ -90,16 +87,12 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 
 	// test we are already sure we need to build, so we don't test to see if OOD
 	// via go, just run the build
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "test", "p1...").Return(nil, "bah", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "test", "p2/p3").Return(nil, "humbug", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p1...").Return(nil, "bah", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p2/p3").Return(nil, "humbug", nil)
 
 	cli.EXPECT().CmdCommit("bah", nil)
 	cli.EXPECT().CmdCommit("humbug", nil).Return("imagehumbug", nil)
 	cli.EXPECT().CmdTag("imagehumbug", true, &io.TagInfo{"test", "nashville"})
-
-	//cleanup the container used for probe
-	cli.EXPECT().CmdRmContainer("bah")
-	cli.EXPECT().CmdRmContainer("humbug")
 
 	//hit it!
 	c.Build("test:nashville")
@@ -147,12 +140,21 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	buffer.WriteString("stuff")
 
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "install", "-n", "p1...").Return(new(bytes.Buffer), "probe1", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "test", "p1...").Return(nil, "cont1", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "-n", "p1...").Return(new(bytes.Buffer), "", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p1...").Return(nil, "cont1", nil)
 
 	//test for code build needed, then build it
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "install", "-n", "p2/p3").Return(buffer, "probe2", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), false, "go", "test", "p2/p3").Return(nil, "cont2", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "-n", "p2/p3").Return(buffer, "", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p2/p3").Return(nil, "cont2", nil)
+
+	//
+	//Fake the results of the two "probes" with -n, we want to return true (meaning that
+	//there is no output, thus to code is up to date) on the first one.  we return false
+	//on the second one and it needs to be the second one because the system won't
+	//bother asking about the second one if the first one already means we are OOD
+	//
+	//first := cli.EXPECT().EmptyOutput(true).Return(true)
+	//cli.EXPECT().EmptyOutput(true).Return(false).After(first)
 
 	//after we build successfully, we use "ps -q -l" to check to see the id of
 	//the container that we built in.
@@ -160,12 +162,6 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	cli.EXPECT().CmdCommit("cont1", nil).Return("someid", nil)
 	cli.EXPECT().CmdCommit("cont2", nil).Return("someotherid", nil)
 	cli.EXPECT().CmdTag("someotherid", true, &io.TagInfo{"test", "nashville"})
-
-	cli.EXPECT().CmdRmContainer("cont1")
-	cli.EXPECT().CmdRmContainer("cont2")
-	cli.EXPECT().CmdRmContainer("probe1")
-	cli.EXPECT().CmdRmContainer("probe2")
-
 	//hit it!
 	c.Build("test:nashville")
 
