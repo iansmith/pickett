@@ -159,7 +159,11 @@ func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Contain
 	return cont, nil
 }
 
-var EMPTY struct{}
+type fakeStdin int
+
+func (fakeStdin) Read(p []byte) (int, error) {
+	select {}
+}
 
 func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, string, error) {
 	config := &docker.Config{}
@@ -225,7 +229,7 @@ func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, stri
 
 		err = d.client.AttachToContainer(docker.AttachToContainerOptions{
 			Container:    cont.ID,
-			InputStream:  os.Stdin,
+			InputStream:  fakeStdin(0),
 			OutputStream: os.Stdout,
 			ErrorStream:  os.Stderr,
 			Logs:         true,
