@@ -49,9 +49,9 @@ func TestGoPackagesFailOnBuildStep2(t *testing.T) {
 	cli.EXPECT().InspectImage("fart:chattanooga").Return(nil, fakeInspectError)
 
 	// mock out the docker api calls to build/test the software
-	first := cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "p4...").Return(nil, "some_cont", nil)
+	first := cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "install", "p4...").Return(nil, "some_cont", nil)
 	fakeErr := errors.New("whoa doggie")
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "p5/p6").Return(nil, "", fakeErr).After(first)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "install", "p5/p6").Return(nil, "", fakeErr).After(first)
 
 	//one commits, one for each successful build
 	cli.EXPECT().CmdCommit("some_cont", nil)
@@ -87,8 +87,8 @@ func TestGoPackagesAllBuilt(t *testing.T) {
 
 	// test we are already sure we need to build, so we don't test to see if OOD
 	// via go, just run the build
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p1...").Return(nil, "bah", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p2/p3").Return(nil, "humbug", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "test", "p1...").Return(nil, "bah", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "test", "p2/p3").Return(nil, "humbug", nil)
 
 	cli.EXPECT().CmdCommit("bah", nil)
 	cli.EXPECT().CmdCommit("humbug", nil).Return("imagehumbug", nil)
@@ -140,12 +140,16 @@ func TestGoPackagesOODOnSource(t *testing.T) {
 	buffer := new(bytes.Buffer)
 	buffer.WriteString("stuff")
 
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "-n", "p1...").Return(new(bytes.Buffer), "", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p1...").Return(nil, "cont1", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "install", "-n", "p1...").Return(new(bytes.Buffer), "probe1", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "test", "p1...").Return(nil, "cont1", nil)
 
 	//test for code build needed, then build it
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "install", "-n", "p2/p3").Return(buffer, "", nil)
-	cli.EXPECT().CmdRun(gomock.Any(), "go", "test", "p2/p3").Return(nil, "cont2", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "install", "-n", "p2/p3").Return(buffer, "probe2", nil)
+	cli.EXPECT().CmdRun(gomock.Any(), nil, "go", "test", "p2/p3").Return(nil, "cont2", nil)
+
+	//removing the probe containers
+	cli.EXPECT().CmdRmContainer("probe1").Return(nil)
+	cli.EXPECT().CmdRmContainer("probe2").Return(nil)
 
 	//
 	//Fake the results of the two "probes" with -n, we want to return true (meaning that

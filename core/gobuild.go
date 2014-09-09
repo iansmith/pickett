@@ -79,8 +79,11 @@ func (g *goBuilder) ood(conf *Config) (time.Time, bool, error) {
 			}
 		} else {
 			//fire for range
-			buf, _, err := conf.cli.CmdRun(runConfig, seq...)
+			buf, cname, err := conf.cli.CmdRun(runConfig, nil, seq...)
 			if err != nil {
+				return time.Time{}, true, err
+			}
+			if err := conf.cli.CmdRmContainer(cname); err != nil {
 				return time.Time{}, true, err
 			}
 			if buf.Len() != 0 {
@@ -143,9 +146,10 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 	}
 	img := runConfig.Image
 
+	previousContainer := ""
 	for _, seq := range sequence {
 		runConfig.Image = img
-		_, contId, err := conf.cli.CmdRun(runConfig, seq...)
+		_, contId, err := conf.cli.CmdRun(runConfig, nil, seq...)
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -153,6 +157,14 @@ func (g *goBuilder) build(conf *Config) (time.Time, error) {
 		img, err = conf.cli.CmdCommit(contId, nil)
 		if err != nil {
 			return time.Time{}, err
+		}
+
+		//remove intermediates
+		if previousContainer != "" {
+			if err := conf.cli.CmdRmContainer(previousContainer); err != nil {
+				return time.Time{}, err
+			}
+			previousContainer = contId
 		}
 	}
 

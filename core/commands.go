@@ -19,7 +19,7 @@ type runVolumeSpec struct {
 
 // CmdRun is the 'run' entry point of the program with the targets filled in
 // and a working helper.
-func CmdRun(target string, runVol string, config *Config) (int, error) {
+func CmdRun(rootName string, target string, runVol string, config *Config) (int, error) {
 	var vol *runVolumeSpec
 	if runVol != "" {
 		pair := strings.Split(runVol, ":")
@@ -28,7 +28,7 @@ func CmdRun(target string, runVol string, config *Config) (int, error) {
 		}
 		vol = &runVolumeSpec{pair[0], pair[1]}
 	}
-	return config.Execute(target, vol)
+	return config.Execute(rootName, target, vol)
 }
 
 //return value is a bit tricky here for the primary return.  If it's nil

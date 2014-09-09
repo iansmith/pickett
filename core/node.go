@@ -31,7 +31,8 @@ type builder interface {
 type runner interface {
 	namer
 	//this returns a map of the results, as containers
-	run(bool, *Config, string, int, *runVolumeSpec) (*policyInput, error)
+	run(bool, *Config, string, int, *runVolumeSpec,
+		*io.StructuredContainerName) (*policyInput, error)
 
 	//some misc params for the run
 	imageName() string

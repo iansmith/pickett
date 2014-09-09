@@ -60,8 +60,14 @@ type CopyArtifact struct {
 	SourcePath, DestinationDir string
 }
 
+type StructuredContainerName struct {
+	prefix string
+	suffix string
+	num    int
+}
+
 type DockerCli interface {
-	CmdRun(*RunConfig, ...string) (*bytes.Buffer, string, error)
+	CmdRun(*RunConfig, *StructuredContainerName, ...string) (*bytes.Buffer, string, error)
 	CmdTag(string, bool, *TagInfo) error
 	CmdCommit(string, *TagInfo) (string, error)
 	CmdBuild(*BuildConfig, string, string) error
@@ -122,41 +128,14 @@ func newDockerCli() (DockerCli, error) {
 	return result, nil
 }
 
-func (d *dockerCli) createNamedContainer(config *docker.Config) (*docker.Container, error) {
-	tries := 0
-	ok := false
-	var cont *docker.Container
-	var err error
+func (d *dockerCli) createNamedContainer(config *docker.Config, cname *StructuredContainerName) (*docker.Container, error) {
+
 	var opts docker.CreateContainerOptions
-	for tries < 3 {
-		opts.Config = config
-		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Attempting to create container %s (%d) from image: %s", opts.Name, tries, opts.Config.Image)
-
-		cont, err = d.client.CreateContainer(opts)
-		if err != nil {
-			detail, ok := err.(*docker.Error)
-			if ok && detail.Status == 409 {
-				tries++
-				continue
-			} else {
-				return nil, err
-			}
-		}
-		ok = true
-		break
+	opts.Config = config
+	if cname != nil {
+		opts.Name = cname.String()
 	}
-	if !ok {
-		opts.Name = "" //fallback
-		opts.Name = newPhrase()
-		flog.Debugf("[docker cmd] Creating container named: %s", opts.Name)
-
-		cont, err = d.client.CreateContainer(opts)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return cont, nil
+	return d.client.CreateContainer(opts)
 }
 
 type fakeStdin int
@@ -165,13 +144,13 @@ func (fakeStdin) Read(p []byte) (int, error) {
 	select {}
 }
 
-func (d *dockerCli) CmdRun(runconf *RunConfig, s ...string) (*bytes.Buffer, string, error) {
+func (d *dockerCli) CmdRun(runconf *RunConfig, cname *StructuredContainerName, s ...string) (*bytes.Buffer, string, error) {
 	config := &docker.Config{}
 	config.Cmd = s
 	config.Image = runconf.Image
 
 	fordebug := new(bytes.Buffer)
-	cont, err := d.createNamedContainer(config)
+	cont, err := d.createNamedContainer(config, cname)
 	if err != nil {
 		return nil, "", err
 	}
@@ -704,4 +683,17 @@ func (c *contInspect) ContainerID() string {
 
 func (c *contInspect) ExitStatus() int {
 	return c.wrapped.State.ExitCode
+}
+
+func NewStructuredContainerName(part1 string, part2 string, n int) *StructuredContainerName {
+	return &StructuredContainerName{part1, part2, n}
+}
+func (s *StructuredContainerName) String() string {
+	return fmt.Sprintf("%s.%s.%d", s.prefix, s.suffix, s.num)
+}
+func (s *StructuredContainerName) Prefix() string {
+	return s.prefix
+}
+func (s *StructuredContainerName) Primary() string {
+	return s.suffix
 }

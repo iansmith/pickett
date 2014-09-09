@@ -213,10 +213,10 @@ func (c *Config) Build(name string) error {
 }
 
 // Execute is called by the "main()" of the pickett program to run a "target".
-func (c *Config) Execute(name string, vol *runVolumeSpec) (int, error) {
-	pair := strings.Split(strings.Trim(name, " \n"), ".")
+func (c *Config) Execute(rootName string, target string, vol *runVolumeSpec) (int, error) {
+	pair := strings.Split(strings.Trim(target, " \n"), ".")
 	if len(pair) != 2 {
-		return 1, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", name)
+		return 1, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", target)
 	}
 	tmap, isPresent := c.nameToTopology[pair[0]]
 	if !isPresent {
@@ -236,9 +236,10 @@ func (c *Config) Execute(name string, vol *runVolumeSpec) (int, error) {
 
 	exitStatus := 0
 	for i := 0; i < info.instances; i++ {
+		scn := pickett_io.NewStructuredContainerName(rootName, pair[1], i)
 		// wait on the last instance only, in case many are specificed.
 		wait := info.runner.waitFor() && i == info.instances-1
-		p, err := info.runner.run(wait, c, pair[0], i, vol)
+		p, err := info.runner.run(wait, c, pair[0], i, vol, scn)
 		if err != nil {
 			return 1, err
 		}
