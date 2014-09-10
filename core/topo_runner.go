@@ -27,6 +27,9 @@ type topoRunner struct {
 	wait          bool
 }
 
+func (n *topoRunner) consumed() []runner {
+	return n.consumes
+}
 func (n *topoRunner) name() string {
 	return n.n
 }
@@ -75,7 +78,7 @@ func (n *topoRunner) imageName() string {
 func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance int,
 	rv *runVolumeSpec, scn *io.StructuredContainerName) (*policyInput, error) {
 	links := make(map[string]string)
-	for _, r := range n.consumes {
+	for _, r := range n.consumed() {
 		flog.Debugf("launching %s because %s consumes it (only launching one instance)", r.name(), n.name())
 		derivedScn := io.NewStructuredContainerName(scn.Prefix(), r.name(), 0)
 		flog.Debugf("constructing new name from %s based on %s: %s", scn, r.name(), derivedScn)

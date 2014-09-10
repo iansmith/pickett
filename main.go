@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/igneous-systems/logit"
@@ -27,7 +28,7 @@ var (
 	// Actions
 	run         = app.Command("run", "Runs a specific node in a topology, including all depedencies.")
 	runTopo     = run.Arg("topo", "Topo node.").Required().String()
-	runRootName = run.Arg("rootname", "Root name (prefix) for containers").Default(os.Getenv("USER")).String()
+	runRootName = run.Flag("rootname", "Root name (prefix) for containers").Default(os.Getenv("USER")).String()
 	runVol      = run.Flag("runvol", "runvolume like /foo:/bar/foo").Short('r').String()
 
 	status        = app.Command("status", "Shows the status of all the known buildable tags and/or runnable nodes.")
@@ -39,8 +40,9 @@ var (
 	stop      = app.Command("stop", "Stop all or a specific node.")
 	stopNodes = stop.Arg("topology.nodes", "Topology Nodes").Strings()
 
-	drop      = app.Command("drop", "Stop and delete all or specific node.")
-	dropNodes = drop.Arg("topology.nodes", "Topology Nodes").Strings()
+	drop         = app.Command("drop", "stop and delete specific containers based on topology")
+	dropTopo     = drop.Arg("topo", "Topology Nodes").Required().String()
+	dropRootName = drop.Flag("rootname", "Root name (prefix) for containers").Default(os.Getenv("USER")).String()
 
 	wipe     = app.Command("wipe", "Delete all or specified tag (force rebuild next time).")
 	wipeTags = wipe.Arg("tags", "Tags").Strings()
@@ -82,6 +84,9 @@ func makeIOObjects(path string) (io.Helper, io.DockerCli, io.EtcdClient, error) 
 	etcd, err := io.NewEtcdClient()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to connect to etcd, maybe its not running? %v", err)
+	}
+	if err := cli.Ping(); err != nil {
+		return nil, nil, nil, err
 	}
 	return helper, cli, etcd, nil
 }
@@ -143,7 +148,10 @@ func wrappedMain() int {
 
 	helper, docker, etcd, err := makeIOObjects(absconf)
 	if err != nil {
-		flog.Errorf("%v", err)
+		if strings.HasSuffix(err.Error(), "EOF") {
+			flog.Warningf("We read an EOF from docker and that likely means that we can't reach the DOCKER_HOST")
+		}
+		flog.Errorf("%v (detail: %s)", err, err.Error())
 		return 1
 	}
 	reader := helper.ConfigReader()
@@ -164,7 +172,7 @@ func wrappedMain() int {
 	case "stop":
 		err = pickett.CmdStop(*stopNodes, config)
 	case "drop":
-		err = pickett.CmdDrop(*dropNodes, config)
+		err = pickett.CmdDrop(*dropRootName, *dropTopo, config)
 	case "wipe":
 		err = pickett.CmdWipe(*wipeTags, config)
 	case "ps":

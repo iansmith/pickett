@@ -101,6 +101,10 @@ func (p *policyInput) stop(topoName string, instance int, scn *io.StructuredCont
 	if err := cli.CmdStop(p.containerName); err != nil {
 		return err
 	}
+	flog.Infof("trying to stop %s because of policy!", p.containerName)
+	if err := cli.CmdStop(p.containerName); err != nil {
+		return err
+	}
 	if _, err := etcd.Del(formKey(CONTAINERS, p.r, scn.Prefix(), instance)); err != nil {
 		return err
 	}

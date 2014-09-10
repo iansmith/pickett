@@ -223,36 +223,76 @@ func CmdStop(targets []string, config *Config) error {
 	return nil
 }
 
+func validateTopoName(target string, config *Config) (topoMap, *topoInfo, error) {
+	pair := strings.Split(strings.Trim(target, " \n"), ".")
+	if len(pair) != 2 {
+		return nil, nil, fmt.Errorf("unable to understand '%s', expect something like 'foo.bar'", target)
+	}
+	tmap, isPresent := config.nameToTopology[pair[0]]
+	if !isPresent {
+		return nil, nil, fmt.Errorf("no such target for run: '%s'", pair[0])
+	}
+	var info *topoInfo
+	for key, value := range tmap {
+		if pair[1] == key {
+			info = value
+			break
+		}
+	}
+	if info == nil {
+		return nil, nil, fmt.Errorf("unable to understand '%s', expected something like foo.bar (%s is ok)", pair[1], pair[0])
+	}
+	return tmap, info, nil
+}
+
 // CmdDrop stops and removes the targets containers
-func CmdDrop(targets []string, config *Config) error {
-	err := CmdStop(targets, config)
+func CmdDrop(rootName string, target string, config *Config) error {
+	tmap, info, err := validateTopoName(target, config)
 	if err != nil {
 		return err
 	}
-	dropSet := chosenRunnables(config, targets)
-	for _, drop := range dropSet {
-		pair := strings.Split(drop, ".")
-		if len(pair) != 2 {
-			panic(fmt.Sprintf("can't understand the target %s", drop))
+	queue := []*topoInfo{info}
+	names := []*io.StructuredContainerName{}
+
+	for len(queue) > 0 {
+		elem := queue[0]
+		queue = queue[1:]
+
+		for i := 0; i < elem.instances; i++ {
+			scn := io.NewStructuredContainerName(rootName, elem.runner.name(), i)
+			names = append(names, scn)
+		outer:
+			for _, c := range elem.runner.consumed() {
+				for _, q := range queue {
+					if q.runner.name() == c.name() {
+						continue outer
+					}
+				}
+				queue = append(queue, tmap[c.name()])
+			}
+
 		}
-		instances, err := statusInstances(pair[0], pair[1], config)
+	}
+	for _, scn := range names {
+		name := scn.String()
+		insp, err := config.cli.InspectContainer(name)
+
 		if err != nil {
+			if err.Error() != "No such container: "+name {
+				return err
+			}
+			continue
+		}
+		if insp.Running() {
+			if err := config.cli.CmdStop(name); err != nil {
+				return err
+			}
+		}
+		if err := config.cli.CmdRmContainer(name); err != nil {
+			flog.Infof("HACK HACK on RM container:%s", err.Error())
 			return err
 		}
-		for i, contId := range instances {
-			if err := config.cli.CmdRmContainer(contId); err != nil {
-				flog.Errorf("Failed to remove %s, already destroyed ? - %s", contId, err)
-				continue // This can happen, so we should not error out.
-			}
-			key := filepath.Join(io.PICKETT_KEYSPACE, CONTAINERS, pair[0], pair[1], fmt.Sprint(i))
-			oldId, err := config.etcd.Del(key)
-			if err != nil || oldId != contId {
-				if err != nil {
-					return err
-				}
-				return fmt.Errorf("Unexpected container id: expecting %s but got %s!", contId, oldId)
-			}
-		}
+
 	}
 	return nil
 }

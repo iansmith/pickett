@@ -42,6 +42,7 @@ type runner interface {
 	privileged() bool
 	waitFor() bool
 	contName() string
+	consumed() []runner
 
 	//note that this method is not really asking a question of the runner, it's asking a
 	//question about the *image* that the runner executes in

@@ -83,6 +83,7 @@ type DockerCli interface {
 	InspectContainer(string) (InspectedContainer, error)
 	ListContainers() (apiContainers, error)
 	ListImages() (apiImages, error)
+	Ping() error
 }
 
 type InspectedImage interface {
@@ -308,6 +309,10 @@ func (d *dockerCli) CmdCommit(containerId string, info *TagInfo) (string, error)
 	}
 
 	return image.ID, nil
+}
+
+func (d *dockerCli) Ping() error {
+	return d.client.Ping()
 }
 
 func (d *dockerCli) tarball(pathToDir string, localName string, tw *tar.Writer) error {
