@@ -237,8 +237,8 @@ func (p policy) appyPolicy(teeOutput bool, in *policyInput, topoName string, ins
 
 //createPolicyInput does the work of interrogating etcd and if necessary docker to figure
 //out the state of services.  It returns a policyInput suitable for applying policy to.
-func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*policyInput, error) {
-	key := formKey(CONTAINERS, r, topoName, instance)
+func createPolicyInput(r runner, scn *io.StructuredContainerName, instance int, conf *Config) (*policyInput, error) {
+	key := formKey(CONTAINERS, r, scn.Prefix(), instance)
 	value, present, err := conf.etcd.Get(key)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func createPolicyInput(r runner, topoName string, instance int, conf *Config) (*
 		if err != nil {
 			flog.Debugf("ignoring docker container %s that is AWOL, probably was manually killed... %s", value, err)
 			//delete the offending container
-			_, err = conf.etcd.Del(formKey(CONTAINERS, r, topoName, instance))
+			_, err = conf.etcd.Del(formKey(CONTAINERS, r, scn.Prefix(), instance))
 			if err != nil {
 				return nil, err
 			}

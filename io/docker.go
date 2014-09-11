@@ -136,7 +136,11 @@ func (d *dockerCli) createNamedContainer(config *docker.Config, cname *Structure
 	if cname != nil {
 		opts.Name = cname.String()
 	}
-	return d.client.CreateContainer(opts)
+	cont, err := d.client.CreateContainer(opts)
+	if err != nil {
+		panic(fmt.Sprintf("create error: %s", cname))
+	}
+	return cont, err
 }
 
 type fakeStdin int

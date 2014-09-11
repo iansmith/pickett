@@ -2,10 +2,10 @@
 
 set -xe
 
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-	echo "Unclean git repo: bailing on release"
-	exit 1
-fi
+#if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+#	echo "Unclean git repo: bailing on release"
+#	exit 1
+#fi
 
 # Capture git rev for the binary versioning
 COMMIT=$(git rev-parse HEAD)
@@ -28,7 +28,7 @@ for os in linux darwin ; do
 			-- -o /dev/null "$RELURL"
 		echo Release uploaded to $RELURL
 	fi
-	rm -f $OUTPUT
+#	rm -f $OUTPUT
 
 done
 

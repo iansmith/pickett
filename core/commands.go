@@ -275,6 +275,7 @@ func CmdDrop(rootName string, target string, config *Config) error {
 	}
 	for _, scn := range names {
 		name := scn.String()
+		flog.Debugf("dropping container if exists %s", name)
 		insp, err := config.cli.InspectContainer(name)
 
 		if err != nil {

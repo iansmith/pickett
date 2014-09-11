@@ -89,7 +89,7 @@ func (n *topoRunner) run(teeOutput bool, conf *Config, topoName string, instance
 		links[input.containerName] = input.r.name()
 	}
 
-	in, err := createPolicyInput(n, topoName, instance, conf)
+	in, err := createPolicyInput(n, scn, instance, conf)
 	if err != nil {
 		return nil, err
 	}
